@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AGENT_DASHBOARD // SYSTEM CONTROL</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" crossorigin>
+</head>
+<body>
+  <!-- STATUS BAR -->
+  <header id="status-bar">
+    <div class="status-left">
+      <span class="status-icon">◈</span>
+      <span class="status-ref">REF: AGENT_DASHBOARD_V1</span>
+      <span class="status-sep">//</span>
+      <span id="connection-status" class="status-active">CONNECTING</span>
+      <span class="status-sep">//</span>
+      <span id="session-count">0 SESSIONS</span>
+    </div>
+    <div class="status-right">
+      <span id="poll-indicator" class="pulse-dot"></span>
+      <span class="status-dim">POLL: 3s</span>
+    </div>
+  </header>
+
+  <!-- LAUNCH PANEL -->
+  <section id="launch-panel">
+    <div class="panel-header">
+      <span class="section-label">01 / LAUNCH_CONTROL</span>
+      <button id="toggle-advanced" class="btn-ghost">ADVANCED ▾</button>
+    </div>
+    <div id="presets-grid" class="presets-grid">
+      <!-- filled by JS -->
+    </div>
+    <div id="advanced-form" class="advanced-form hidden">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">// AGENT</label>
+          <select id="launch-agent" class="form-input">
+            <option value="codex">CODEX</option>
+            <option value="opus">OPUS</option>
+            <option value="sonnet">SONNET</option>
+            <option value="haiku">HAIKU</option>
+            <option value="gemini">GEMINI</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">// ROLE</label>
+          <select id="launch-role" class="form-input">
+            <option value="builder">BUILDER</option>
+            <option value="researcher">RESEARCHER</option>
+            <option value="reviewer">REVIEWER</option>
+            <option value="tester">TESTER</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">// WORKDIR</label>
+          <input id="launch-workdir" type="text" class="form-input" placeholder="/mnt/f/project">
+        </div>
+        <div class="form-group">
+          <label class="form-label">// SESSION_NAME</label>
+          <input id="launch-name" type="text" class="form-input" placeholder="auto-generated">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group flex-grow">
+          <label class="form-label">// FLAGS</label>
+          <input id="launch-flags" type="text" class="form-input" placeholder="additional flags">
+        </div>
+        <button id="launch-btn" class="btn-primary">▶ LAUNCH</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- AGENT GRID -->
+  <main>
+    <div class="panel-header">
+      <span class="section-label">02 / ACTIVE_SESSIONS</span>
+    </div>
+    <div id="agent-grid" class="agent-grid">
+      <!-- filled by JS -->
+    </div>
+    <div id="empty-state" class="empty-state">
+      <div class="empty-icon">◎</div>
+      <div class="empty-text">// NO_ACTIVE_SESSIONS</div>
+      <div class="empty-sub">// LAUNCH_TO_BEGIN</div>
+    </div>
+  </main>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container"></div>
+
+  <!-- CONFIRM MODAL -->
+  <div id="confirm-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-title">// CONFIRM_ACTION</div>
+      <div id="confirm-message" class="modal-message"></div>
+      <div class="modal-actions">
+        <button id="confirm-cancel" class="btn-ghost">CANCEL</button>
+        <button id="confirm-ok" class="btn-danger">TERMINATE</button>
+      </div>
+    </div>
+  </div>
+
+  <footer id="footer">
+    <span>// AGENT_DASHBOARD V1.0</span>
+    <span class="status-sep">//</span>
+    <span>PORT <span id="footer-port">3847</span></span>
+    <span class="status-sep">//</span>
+    <span class="status-dim">VECTORHEART_PROTOCOL</span>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js" crossorigin></script>
+  <script src="app.js"></script>
+</body>
+</html>
