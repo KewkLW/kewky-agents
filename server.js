@@ -4,7 +4,9 @@ const http = require('http');
 const { WebSocketServer } = require('ws');
 const path = require('path');
 
-const { PORT, POLL_INTERVAL, TAILSCALE_HOST, USER_HOME, AGENTS, PRESETS } = require('./src/config');
+const { PORT, POLL_INTERVAL, TAILSCALE_HOST, USER_HOME, AGENTS, PRESETS,
+        WSL_DISTRO, REMOTE_HOSTS, WSL_PRESETS, REMOTE_PRESETS } = require('./src/config');
+const { detectWSL } = require('./src/platform');
 const sessions = require('./src/sessions');
 const { parseSessionInfo } = require('./src/detect');
 const { detectWorktree } = require('./src/worktree');
@@ -12,6 +14,14 @@ const research = require('./src/research');
 const comms = require('./src/comms');
 const { runDistributor } = require('./src/auto-distribute');
 const { checkAndNudge } = require('./src/auto-nudge');
+
+// Detect platform capabilities at startup
+const wslInfo = detectWSL();
+const remoteHostNames = Object.keys(REMOTE_HOSTS);
+
+// Inter-agent message audit log
+const messageLog = [];
+const MAX_MESSAGE_LOG = 500;
 
 const app = express();
 app.use(express.json());
@@ -32,7 +42,18 @@ app.get('/api/config', (req, res) => {
   for (const [name, cfg] of Object.entries(AGENTS)) {
     agentDetails[name] = { model: cfg.model, type: cfg.type };
   }
-  res.json({ presets: PRESETS, agents: Object.keys(AGENTS), agentDetails, tailscaleHost: TAILSCALE_HOST });
+  res.json({
+    presets: PRESETS,
+    agents: Object.keys(AGENTS),
+    agentDetails,
+    tailscaleHost: TAILSCALE_HOST,
+    wslAvailable: wslInfo.available,
+    wslDistros: wslInfo.distros,
+    wslPresets: wslInfo.available ? WSL_PRESETS : [],
+    remoteHostsConfigured: remoteHostNames.length > 0,
+    remoteHosts: REMOTE_HOSTS,
+    remotePresets: REMOTE_PRESETS
+  });
 });
 
 // Team lead API — get all agent statuses
@@ -66,7 +87,7 @@ app.get('/api/team/output/:session', async (req, res) => {
 
 // Team lead API — launch an agent
 app.post('/api/team/launch', async (req, res) => {
-  const { agent, role, workdir, sessionName, flags, initMessage } = req.body;
+  const { agent, role, workdir, sessionName, flags, initMessage, platform, host } = req.body;
   const agentConfig = AGENTS[agent];
   if (!agentConfig) {
     return res.status(400).json({ error: `Unknown agent: ${agent}` });
@@ -75,7 +96,14 @@ app.post('/api/team/launch', async (req, res) => {
   const dir = workdir || USER_HOME;
   let launchCmd = agentConfig.launchCmd;
   if (flags) launchCmd += ' ' + flags;
-  const ok = sessions.create(name, launchCmd, { cwd: dir, env: agentConfig.env });
+  const createOpts = { cwd: dir, env: agentConfig.env };
+  if (platform === 'wsl') {
+    createOpts.platform = 'wsl';
+  } else if (platform === 'ssh' && host && REMOTE_HOSTS[host]) {
+    createOpts.platform = 'ssh';
+    createOpts.sshTarget = REMOTE_HOSTS[host];
+  }
+  const ok = sessions.create(name, launchCmd, createOpts);
   if (ok) {
     console.log(`// TEAM_LEAD_LAUNCH: ${name} [${agent}/${role}]`);
     if (agentConfig.postLaunch) {
@@ -127,6 +155,54 @@ app.post('/api/debug', (req, res) => {
 
 app.get('/api/debug', (req, res) => {
   res.json(debugLogs);
+});
+
+// ---- Agent Discovery & Messaging API ----
+
+app.get('/api/agents', (req, res) => {
+  const agents = previousState.map(s => ({
+    name: s.name,
+    agentType: s.agentType,
+    role: s.role,
+    status: s.status,
+    platform: s.platform || 'native',
+    host: s.host || 'local',
+    uptime: s.uptime,
+    workdir: s.workdir
+  }));
+  res.json({ agents, timestamp: Date.now() });
+});
+
+app.post('/api/send', (req, res) => {
+  const { from, to, message } = req.body;
+  if (!from || !to || !message) {
+    return res.status(400).json({ error: 'from, to, and message required' });
+  }
+
+  // Find target session by name (exact or partial match)
+  const targetSession = previousState.find(s =>
+    s.name === to || s.name.includes(to)
+  );
+  if (!targetSession) {
+    return res.status(404).json({ error: `No active session matching: ${to}` });
+  }
+
+  const formatted = `[MSG from ${from}]: ${message}`;
+  const ok = sessions.write(targetSession.name, formatted + '\r');
+  if (!ok) {
+    return res.status(500).json({ error: `Failed to write to session: ${targetSession.name}` });
+  }
+
+  const entry = { from, to: targetSession.name, message, timestamp: Date.now() };
+  messageLog.push(entry);
+  if (messageLog.length > MAX_MESSAGE_LOG) messageLog.shift();
+
+  console.log(`// MSG: ${from} -> ${targetSession.name}: ${message.slice(0, 60)}`);
+  res.json({ ok: true, delivered: targetSession.name });
+});
+
+app.get('/api/messages', (req, res) => {
+  res.json({ messages: messageLog, count: messageLog.length });
 });
 
 app.get('/debug', (req, res) => {
@@ -287,7 +363,7 @@ function handleClientMessage(ws, msg) {
 }
 
 async function handleLaunch(ws, msg) {
-  const { agent, role, workdir, sessionName, flags } = msg;
+  const { agent, role, workdir, sessionName, flags, platform, host } = msg;
   const agentConfig = AGENTS[agent];
   if (!agentConfig) {
     ws.send(JSON.stringify({ type: 'event', event: 'error', data: { message: `Unknown agent: ${agent}` } }));
@@ -301,7 +377,16 @@ async function handleLaunch(ws, msg) {
   let launchCmd = agentConfig.launchCmd;
   if (flags) launchCmd += ' ' + flags;
 
-  const ok = sessions.create(name, launchCmd, { cwd: dir, env: agentConfig.env });
+  // Build session create options
+  const createOpts = { cwd: dir, env: agentConfig.env };
+  if (platform === 'wsl') {
+    createOpts.platform = 'wsl';
+  } else if (platform === 'ssh' && host && REMOTE_HOSTS[host]) {
+    createOpts.platform = 'ssh';
+    createOpts.sshTarget = REMOTE_HOSTS[host];
+  }
+
+  const ok = sessions.create(name, launchCmd, createOpts);
 
   if (ok && agentConfig.postLaunch) {
     setTimeout(() => {
@@ -573,6 +658,8 @@ server.listen(PORT, () => {
   console.log(`// POLL_INTERVAL: ${POLL_INTERVAL}ms`);
   console.log(`// TAILSCALE_HOST: ${TAILSCALE_HOST}`);
   console.log(`// RESEARCH_DIR: ${research.RESEARCH_DIR}`);
+  console.log(`// WSL: ${wslInfo.available ? `available (${wslInfo.distros.join(', ')})` : 'not available'}`);
+  console.log(`// REMOTE_HOSTS: ${remoteHostNames.length > 0 ? remoteHostNames.join(', ') : 'none configured'}`);
   console.log(`// OPEN: http://localhost:${PORT}`);
   pollAndBroadcast();
 });

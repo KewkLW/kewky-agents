@@ -1,5 +1,6 @@
 const os = require('os');
 const path = require('path');
+const { getRemoteHosts } = require('./platform');
 
 const PORT = process.env.AGENT_DASH_PORT || 3847;
 const POLL_INTERVAL = 3000;
@@ -9,6 +10,9 @@ const TEAMS_MCP_PATH = process.env.TEAMS_MCP_PATH || '';
 const USER_HOME = process.env.USERPROFILE || os.homedir();
 const CODEX_HOME_PRIMARY = process.env.CODEX_HOME || path.join(USER_HOME, '.codex');
 const CODEX_HOME_ALT = process.env.CODEX_HOME_ALT || path.join(USER_HOME, '.codex-account-b');
+
+const WSL_DISTRO = process.env.WSL_DISTRO || 'Ubuntu-24.04';
+const REMOTE_HOSTS = getRemoteHosts();
 
 const AGENTS = {
   opus: {
@@ -112,8 +116,33 @@ const PRESETS = [
   { label: 'CODEX_REVIEWER', agent: 'codex-primary', role: 'reviewer', icon: '\u22A1' }
 ];
 
+// WSL presets — same agents but spawned inside WSL
+const WSL_PRESETS = [
+  { label: 'WSL_OPUS', agent: 'opus', role: 'builder', icon: '\u25C6', platform: 'wsl' },
+  { label: 'WSL_SONNET', agent: 'sonnet', role: 'builder', icon: '\u25C7', platform: 'wsl' },
+  { label: 'WSL_HAIKU', agent: 'haiku', role: 'researcher', icon: '\u25CE', platform: 'wsl' },
+  { label: 'WSL_GEMINI', agent: 'gemini', role: 'builder', icon: '\u25B2', platform: 'wsl' },
+  { label: 'WSL_CODEX', agent: 'codex-primary', role: 'builder', icon: '>', platform: 'wsl' }
+];
+
+// Remote presets — dynamically built from REMOTE_HOSTS env vars
+const REMOTE_PRESETS = [];
+for (const [hostName, hostConfig] of Object.entries(REMOTE_HOSTS)) {
+  for (const agentKey of ['opus', 'sonnet', 'haiku']) {
+    REMOTE_PRESETS.push({
+      label: `${hostName.toUpperCase()}_${agentKey.toUpperCase()}`,
+      agent: agentKey,
+      role: 'builder',
+      icon: agentKey === 'opus' ? '\u25C6' : agentKey === 'sonnet' ? '\u25C7' : '\u25CE',
+      platform: 'ssh',
+      host: hostName
+    });
+  }
+}
+
 module.exports = {
   PORT, POLL_INTERVAL, TAILSCALE_HOST,
   ACTIVE_TEAM, TEAMS_MCP_PATH, USER_HOME,
-  AGENTS, PRESETS, SPECIAL_KEYS
+  AGENTS, PRESETS, SPECIAL_KEYS,
+  WSL_DISTRO, REMOTE_HOSTS, WSL_PRESETS, REMOTE_PRESETS
 };

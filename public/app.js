@@ -227,6 +227,11 @@ function createCard(session) {
   if (!outputModes[session.name]) {
     outputModes[session.name] = 'off';
   }
+
+  // Apply settings to new card
+  const settings = loadSettings();
+  const commsEl = card.querySelector('.card-comms');
+  if (commsEl && settings.comms === false) commsEl.style.display = 'none';
 }
 
 function updateCard(session) {
@@ -243,6 +248,17 @@ function updateCard(session) {
 
   const roleBadge = card.querySelector('.badge-role');
   roleBadge.textContent = session.role.toUpperCase();
+
+  // Update platform badge
+  let platformBadge = card.querySelector('.badge-platform');
+  if (session.platform && session.platform !== 'native' && !platformBadge) {
+    const header = card.querySelector('.card-header');
+    const killBtn = header.querySelector('.btn-kill-header');
+    platformBadge = document.createElement('span');
+    platformBadge.className = `card-badge badge-platform badge-platform-${session.platform}`;
+    platformBadge.textContent = session.platform.toUpperCase();
+    header.insertBefore(platformBadge, killBtn);
+  }
 
   // Update attached badge
   let attachedBadge = card.querySelector('.badge-attached');
@@ -319,6 +335,7 @@ function buildCardHTML(session) {
       <span class="card-name">${escHtml(session.name)}</span>
       <span class="card-badge badge-agent">${escHtml(session.agentType.toUpperCase())}</span>
       <span class="card-badge badge-role">${escHtml(session.role.toUpperCase())}</span>
+      ${session.platform && session.platform !== 'native' ? `<span class="card-badge badge-platform badge-platform-${escHtml(session.platform)}">${escHtml(session.platform.toUpperCase())}</span>` : ''}
       ${session.attached ? '<span class="card-badge badge-attached">ATTACHED</span>' : ''}
       <button class="btn-kill btn-kill-header">✕</button>
     </div>
@@ -493,9 +510,26 @@ function initLaunchPanel() {
   fetch('/api/config')
     .then(r => r.json())
     .then(config => {
+      // CORE section — always visible
       renderPresets(presetsGrid, config.presets);
       populateAgentDropdown(config.agents);
       populateAgentSelector(config.agentDetails || {});
+
+      // PLATFORMS section — only if WSL or remote hosts available
+      const hasWSL = config.wslAvailable && config.wslPresets && config.wslPresets.length > 0;
+      const hasRemote = config.remoteHostsConfigured && config.remotePresets && config.remotePresets.length > 0;
+
+      if (hasWSL || hasRemote) {
+        const launchPanel = document.getElementById('launch-panel');
+        const platformSection = createCollapsibleSection('PLATFORMS', launchPanel);
+
+        if (hasWSL) {
+          renderPresetSubsection(platformSection.body, 'WSL', config.wslPresets);
+        }
+        if (hasRemote) {
+          renderPresetSubsection(platformSection.body, 'REMOTE', config.remotePresets);
+        }
+      }
     })
     .catch(() => {
       // Fallback presets
@@ -575,16 +609,78 @@ function renderPresets(container, presets) {
   for (const preset of presets) {
     const btn = document.createElement('button');
     btn.className = 'preset-btn';
-    btn.innerHTML = `<span class="preset-icon">${preset.icon || '◈'}</span>${preset.label}`;
+    btn.innerHTML = `<span class="preset-icon">${preset.icon || '\u25C8'}</span>${preset.label}`;
     btn.addEventListener('click', () => {
-      wsSend({
+      const msg = {
         type: 'launch',
         agent: preset.agent,
         role: preset.role
-      });
+      };
+      if (preset.platform) msg.platform = preset.platform;
+      if (preset.host) msg.host = preset.host;
+      wsSend(msg);
     });
     container.appendChild(btn);
   }
+}
+
+function createCollapsibleSection(title, parent) {
+  const section = document.createElement('div');
+  section.className = 'preset-section';
+
+  const header = document.createElement('div');
+  header.className = 'preset-section-header';
+  header.innerHTML = `<span class="section-label" style="font-size:10px">${escHtml(title)}</span><span class="preset-section-toggle">+</span>`;
+
+  const body = document.createElement('div');
+  body.className = 'preset-section-body';
+  body.style.display = 'none';
+
+  header.addEventListener('click', () => {
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'flex';
+    header.querySelector('.preset-section-toggle').textContent = isOpen ? '+' : '\u2212';
+  });
+
+  section.appendChild(header);
+  section.appendChild(body);
+  parent.appendChild(section);
+
+  return { section, header, body };
+}
+
+function renderPresetSubsection(container, label, presets) {
+  const sub = document.createElement('div');
+  sub.className = 'preset-subsection';
+
+  const subLabel = document.createElement('div');
+  subLabel.className = 'preset-subsection-label';
+  subLabel.textContent = label;
+  sub.appendChild(subLabel);
+
+  const grid = document.createElement('div');
+  grid.className = 'presets-grid';
+  grid.style.padding = '4px 0';
+
+  for (const preset of presets) {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn preset-btn-platform';
+    btn.innerHTML = `<span class="preset-icon">${preset.icon || '\u25C8'}</span>${preset.label}`;
+    btn.addEventListener('click', () => {
+      const msg = {
+        type: 'launch',
+        agent: preset.agent,
+        role: preset.role
+      };
+      if (preset.platform) msg.platform = preset.platform;
+      if (preset.host) msg.host = preset.host;
+      wsSend(msg);
+    });
+    grid.appendChild(btn);
+  }
+
+  sub.appendChild(grid);
+  container.appendChild(sub);
 }
 
 // ============================================
@@ -969,6 +1065,132 @@ document.addEventListener('keydown', handleEscapeKey);
 // ============================================
 
 // ============================================
+// SETTINGS
+// ============================================
+
+function loadSettings() {
+  try {
+    const saved = localStorage.getItem('agent-dashboard-settings');
+    return saved ? JSON.parse(saved) : {};
+  } catch { return {}; }
+}
+
+function saveSettings(settings) {
+  try {
+    localStorage.setItem('agent-dashboard-settings', JSON.stringify(settings));
+  } catch {}
+}
+
+function initSettings() {
+  const settings = loadSettings();
+  const defaults = { wsl: true, remote: true, research: true, comms: true, advanced: true };
+  const merged = { ...defaults, ...settings };
+
+  // Set initial checkbox states
+  for (const [key, val] of Object.entries(merged)) {
+    const el = document.getElementById(`setting-${key}`);
+    if (el) el.checked = val;
+  }
+
+  // Apply visibility
+  applySettings(merged);
+
+  // Bind change events
+  for (const key of Object.keys(defaults)) {
+    const el = document.getElementById(`setting-${key}`);
+    if (el) {
+      el.addEventListener('change', () => {
+        const current = loadSettings();
+        current[key] = el.checked;
+        saveSettings(current);
+        applySettings({ ...defaults, ...current });
+      });
+    }
+  }
+
+  // Populate platform status
+  fetch('/api/config')
+    .then(r => r.json())
+    .then(config => {
+      const container = document.getElementById('platform-status');
+      if (!container) return;
+
+      let html = '';
+      // WSL status
+      html += `<div class="platform-status-card">
+        <span class="platform-status-dot ${config.wslAvailable ? 'available' : 'unavailable'}"></span>
+        <span class="platform-status-name">WSL</span>
+        <span class="platform-status-detail">${config.wslAvailable ? config.wslDistros.join(', ') : 'Not available'}</span>
+      </div>`;
+
+      // Remote hosts
+      if (config.remoteHostsConfigured) {
+        for (const [name, info] of Object.entries(config.remoteHosts)) {
+          html += `<div class="platform-status-card">
+            <span class="platform-status-dot available"></span>
+            <span class="platform-status-name">SSH: ${escHtml(name.toUpperCase())}</span>
+            <span class="platform-status-detail">${escHtml(info.user)}@${escHtml(info.host)}:${info.port}</span>
+          </div>`;
+        }
+      } else {
+        html += `<div class="platform-status-card">
+          <span class="platform-status-dot unavailable"></span>
+          <span class="platform-status-name">SSH REMOTE</span>
+          <span class="platform-status-detail">No REMOTE_HOST_* env vars configured</span>
+        </div>`;
+      }
+
+      container.innerHTML = html;
+    })
+    .catch(() => {});
+}
+
+function applySettings(settings) {
+  // Research tab visibility
+  const researchTab = document.querySelector('[data-tab="research"]');
+  const researchContent = document.getElementById('tab-research');
+  if (researchTab) researchTab.style.display = settings.research ? '' : 'none';
+  if (researchContent && !settings.research) researchContent.classList.remove('active');
+
+  // Advanced launch form toggle button
+  const advancedToggle = document.getElementById('toggle-advanced');
+  if (advancedToggle) advancedToggle.style.display = settings.advanced ? '' : 'none';
+  if (!settings.advanced) {
+    const advForm = document.getElementById('advanced-form');
+    if (advForm) advForm.classList.add('hidden');
+  }
+
+  // Team comms visibility (cards re-render handles this via class)
+  document.documentElement.dataset.showComms = settings.comms ? '1' : '0';
+
+  // WSL/Remote are applied when presets render (they check config + settings)
+  document.documentElement.dataset.showWsl = settings.wsl ? '1' : '0';
+  document.documentElement.dataset.showRemote = settings.remote ? '1' : '0';
+
+  // Hide/show platform preset sections that may already be rendered
+  document.querySelectorAll('.preset-subsection').forEach(sub => {
+    const label = sub.querySelector('.preset-subsection-label');
+    if (label) {
+      if (label.textContent === 'WSL') sub.style.display = settings.wsl ? '' : 'none';
+      if (label.textContent === 'REMOTE') sub.style.display = settings.remote ? '' : 'none';
+    }
+  });
+
+  // Hide the entire PLATFORMS section if both WSL and REMOTE are off
+  document.querySelectorAll('.preset-section').forEach(sec => {
+    const header = sec.querySelector('.preset-section-header .section-label');
+    if (header && header.textContent === 'PLATFORMS') {
+      sec.style.display = (settings.wsl || settings.remote) ? '' : 'none';
+    }
+  });
+
+  // Hide comms sections on cards
+  document.querySelectorAll('.card-comms').forEach(el => {
+    el.style.display = settings.comms ? '' : 'none';
+  });
+}
+
+// ============================================
 // TEAM COMMS
 // ============================================
 
@@ -1046,6 +1268,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTabs();
   initLaunchPanel();
   initResearch();
+  initSettings();
   connect();
 
   // Delegated event handler for ATTACH buttons

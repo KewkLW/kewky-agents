@@ -113,6 +113,8 @@ function parseSessionInfo(rawSession, paneLines, tailscaleHost, port) {
     uptimeSeconds: Math.floor((Date.now() - rawSession.created) / 1000),
     workdir: rawSession.workdir,
     attached: rawSession.attached,
+    platform: rawSession.platform || 'native',
+    host: rawSession.host || 'local',
     terminalUrl: buildSshCommand(tailscaleHost, rawSession.name, port),
     lastOutput: paneLines ? paneLines.slice(-30) : []
   };

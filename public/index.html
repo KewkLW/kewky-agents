@@ -28,6 +28,7 @@
   <nav id="tab-nav">
     <button class="tab-btn active" data-tab="sessions">◈ SESSIONS</button>
     <button class="tab-btn" data-tab="research">◎ RESEARCH</button>
+    <button class="tab-btn" data-tab="settings">⚙ SETTINGS</button>
   </nav>
 
   <!-- ========== SESSIONS TAB ========== -->
@@ -156,6 +157,74 @@
         <div class="empty-icon">◎</div>
         <div class="empty-text">// NO_ACTIVE_MISSIONS</div>
         <div class="empty-sub">// DEPLOY_RESEARCH_TEAM_TO_BEGIN</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ========== SETTINGS TAB ========== -->
+  <div id="tab-settings" class="tab-content">
+    <section id="settings-panel">
+      <div class="panel-header">
+        <span class="section-label">01 / FEATURES</span>
+      </div>
+      <div class="settings-form">
+        <div class="settings-group">
+          <label class="settings-toggle">
+            <input type="checkbox" id="setting-wsl" checked>
+            <span class="settings-toggle-slider"></span>
+            <span class="settings-toggle-label">WSL PRESETS</span>
+            <span class="settings-toggle-desc">Show WSL agent launch presets (requires WSL on Windows)</span>
+          </label>
+          <label class="settings-toggle">
+            <input type="checkbox" id="setting-remote" checked>
+            <span class="settings-toggle-slider"></span>
+            <span class="settings-toggle-label">REMOTE HOSTS</span>
+            <span class="settings-toggle-desc">Show SSH remote host agent presets (configure via REMOTE_HOST_* env vars)</span>
+          </label>
+          <label class="settings-toggle">
+            <input type="checkbox" id="setting-research" checked>
+            <span class="settings-toggle-slider"></span>
+            <span class="settings-toggle-label">RESEARCH TAB</span>
+            <span class="settings-toggle-desc">Multi-agent research deployment panel</span>
+          </label>
+          <label class="settings-toggle">
+            <input type="checkbox" id="setting-comms" checked>
+            <span class="settings-toggle-slider"></span>
+            <span class="settings-toggle-label">TEAM COMMS</span>
+            <span class="settings-toggle-desc">Inter-agent message feed on session cards</span>
+          </label>
+          <label class="settings-toggle">
+            <input type="checkbox" id="setting-advanced" checked>
+            <span class="settings-toggle-slider"></span>
+            <span class="settings-toggle-label">ADVANCED LAUNCH</span>
+            <span class="settings-toggle-desc">Show advanced launch form with custom flags, workdir, session name</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="panel-header" style="margin-top:16px">
+        <span class="section-label">02 / PLATFORM_STATUS</span>
+      </div>
+      <div class="settings-form">
+        <div id="platform-status" class="platform-status-grid">
+          <!-- filled by JS -->
+        </div>
+      </div>
+
+      <div class="panel-header" style="margin-top:16px">
+        <span class="section-label">03 / API_ENDPOINTS</span>
+      </div>
+      <div class="settings-form">
+        <div class="api-endpoints">
+          <div class="api-row"><code>GET  /api/agents</code><span class="settings-toggle-desc">List active agents with status, type, platform</span></div>
+          <div class="api-row"><code>POST /api/send</code><span class="settings-toggle-desc">Send message to agent stdin: { from, to, message }</span></div>
+          <div class="api-row"><code>GET  /api/messages</code><span class="settings-toggle-desc">Audit log of inter-agent messages (last 500)</span></div>
+          <div class="api-row"><code>GET  /api/config</code><span class="settings-toggle-desc">Dashboard configuration, presets, platform info</span></div>
+          <div class="api-row"><code>GET  /api/team/status</code><span class="settings-toggle-desc">All agent session statuses</span></div>
+          <div class="api-row"><code>POST /api/team/launch</code><span class="settings-toggle-desc">Launch agent: { agent, role, platform, host }</span></div>
+          <div class="api-row"><code>POST /api/team/send</code><span class="settings-toggle-desc">Send to session: { session, message }</span></div>
+          <div class="api-row"><code>POST /api/team/kill</code><span class="settings-toggle-desc">Kill session: { session }</span></div>
+        </div>
       </div>
     </section>
   </div>

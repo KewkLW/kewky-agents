@@ -1418,6 +1418,235 @@ select.form-input {
   border: 1px solid rgba(138, 155, 174, 0.3);
 }
 
+/* ========================================
+   PLATFORM SECTIONS (collapsible)
+   ======================================== */
+
+.preset-section {
+  border-top: 1px solid var(--border);
+}
+
+.preset-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.preset-section-header:hover {
+  background: rgba(74, 139, 148, 0.05);
+}
+
+.preset-section-toggle {
+  color: var(--cyan);
+  font-size: 14px;
+  font-weight: 700;
+  width: 20px;
+  text-align: center;
+}
+
+.preset-section-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0 20px 12px;
+  gap: 8px;
+}
+
+.preset-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.preset-subsection-label {
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  font-weight: 700;
+  padding-left: 2px;
+}
+
+.preset-btn-platform {
+  border-color: rgba(74, 139, 148, 0.4);
+  color: var(--cyan-bright);
+}
+
+.preset-btn-platform:hover {
+  border-color: var(--cyan-bright);
+  background: rgba(92, 184, 196, 0.1);
+}
+
+/* Platform badges on session cards */
+.badge-platform {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.badge-platform-wsl {
+  background: rgba(250, 204, 21, 0.15);
+  color: var(--yellow);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+}
+
+.badge-platform-ssh {
+  background: rgba(167, 139, 250, 0.15);
+  color: #A78BFA;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+}
+
+/* ========================================
+   SETTINGS TAB
+   ======================================== */
+
+#settings-panel {
+  margin: 12px 12px 0;
+}
+
+.settings-form {
+  padding: 8px 20px 16px;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.settings-toggle:hover {
+  border-color: var(--cyan);
+  background: rgba(74, 139, 148, 0.05);
+}
+
+.settings-toggle input[type="checkbox"] {
+  display: none;
+}
+
+.settings-toggle-slider {
+  width: 36px;
+  height: 20px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  position: relative;
+  flex-shrink: 0;
+  transition: all var(--transition);
+}
+
+.settings-toggle-slider::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: var(--text-dim);
+  border-radius: 50%;
+  transition: all var(--transition);
+}
+
+.settings-toggle input:checked ~ .settings-toggle-slider {
+  background: rgba(74, 139, 148, 0.3);
+  border-color: var(--cyan);
+}
+
+.settings-toggle input:checked ~ .settings-toggle-slider::after {
+  left: 18px;
+  background: var(--cyan);
+}
+
+.settings-toggle-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--white);
+  min-width: 140px;
+}
+
+.settings-toggle-desc {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.03em;
+}
+
+.platform-status-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.platform-status-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  min-width: 200px;
+}
+
+.platform-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.platform-status-dot.available { background: var(--green); }
+.platform-status-dot.unavailable { background: var(--text-dim); }
+
+.platform-status-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--white);
+}
+
+.platform-status-detail {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.api-endpoints {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.api-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 14px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.api-row code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cyan);
+  min-width: 200px;
+  white-space: nowrap;
+}
+
 /* HIDDEN */
 .hidden { display: none !important; }
 

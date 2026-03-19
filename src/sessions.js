@@ -6,6 +6,8 @@
 
 const pty = require('node-pty');
 const os = require('os');
+const { wslPathTranslate } = require('./platform');
+const { WSL_DISTRO } = require('./config');
 
 const sessions = new Map();
 
@@ -20,12 +22,24 @@ function stripAnsi(str) {
             .replace(/\x1b\[[\?]?[0-9;]*[hlm]/g, '');
 }
 
-function getShell() {
+function getShell(platform, sshTarget) {
+  if (platform === 'wsl') return 'wsl.exe';
+  if (platform === 'ssh') return process.platform === 'win32' ? 'ssh.exe' : 'ssh';
   if (process.platform === 'win32') return 'cmd.exe';
   return process.env.SHELL || '/bin/sh';
 }
 
-function getShellArgs(command) {
+function getShellArgs(command, platform, sshTarget) {
+  if (platform === 'wsl') {
+    const distro = WSL_DISTRO;
+    return ['-d', distro, '--', 'bash', '-l', '-c', command];
+  }
+  if (platform === 'ssh' && sshTarget) {
+    const { user, host, port } = sshTarget;
+    // Wrap command for remote PATH resolution (handles brew, nvm, etc.)
+    const remoteCmd = `bash -l -c '${command.replace(/'/g, "'\\''")}'`;
+    return ['-p', String(port), '-t', '-o', 'StrictHostKeyChecking=accept-new', `${user}@${host}`, remoteCmd];
+  }
   if (process.platform === 'win32') return ['/c', command];
   return ['-c', command];
 }
@@ -34,7 +48,7 @@ function getShellArgs(command) {
  * Create a new pty session.
  * @param {string} name - Unique session name
  * @param {string} command - The command to run
- * @param {object} opts - { cwd, env, cols, rows }
+ * @param {object} opts - { cwd, env, cols, rows, platform, sshTarget }
  * @returns {boolean} true if created
  */
 function create(name, command, opts = {}) {
@@ -42,20 +56,33 @@ function create(name, command, opts = {}) {
     kill(name);
   }
 
-  const shell = getShell();
-  const args = getShellArgs(command);
+  const platform = opts.platform || 'native';
+  const sshTarget = opts.sshTarget || null;
+
+  const shell = getShell(platform, sshTarget);
+  const args = getShellArgs(command, platform, sshTarget);
   const cols = opts.cols || 120;
   const rows = opts.rows || 30;
 
-  // Merge env: process.env as base, then opts.env overrides
-  const env = { ...process.env, ...(opts.env || {}) };
+  // Merge env: process.env as base, then opts.env overrides, then dashboard URL
+  const env = {
+    ...process.env,
+    ...(opts.env || {}),
+    AGENT_DASHBOARD_URL: `http://localhost:${process.env.AGENT_DASH_PORT || 3847}`
+  };
+
+  // For WSL, translate Windows cwd to WSL path
+  let cwd = opts.cwd || os.homedir();
+  if (platform === 'wsl') {
+    cwd = os.homedir(); // WSL spawns from Windows home; the command runs inside WSL
+  }
 
   try {
     const handle = pty.spawn(shell, args, {
       name: 'xterm-256color',
       cols,
       rows,
-      cwd: opts.cwd || os.homedir(),
+      cwd,
       env
     });
 
@@ -63,6 +90,8 @@ function create(name, command, opts = {}) {
       handle,
       name,
       command,
+      platform,
+      host: sshTarget ? `${sshTarget.user}@${sshTarget.host}` : (platform === 'wsl' ? WSL_DISTRO : 'local'),
       ringBuffer: [],       // ANSI-stripped lines for status detection
       rawBuffer: '',         // Raw output for xterm replay
       createdAt: Date.now(),
@@ -135,7 +164,9 @@ function list() {
       name,
       created: session.createdAt,
       attached: session.subscribers.size > 0,
-      workdir: session.cwd
+      workdir: session.cwd,
+      platform: session.platform || 'native',
+      host: session.host || 'local'
     });
   }
   return result;
