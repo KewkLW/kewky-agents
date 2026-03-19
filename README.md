@@ -1,6 +1,23 @@
 # Kewky Agents
 
-A multi-agent dashboard for orchestrating AI coding agents (Claude, Codex, Gemini) across machines. Launch agents, monitor their status in real-time, and let them coordinate — all from a single web UI.
+Launch, monitor, and control AI coding agents from anywhere — your phone, a friend's laptop, or across your own machines. One dashboard, every platform.
+
+## The Idea
+
+You have AI agents (Claude, Codex, Gemini). You want to run several at once, on different machines, and keep tabs on all of them without being chained to one terminal. Maybe you're on your phone at lunch and want to check if your Opus agent finished that refactor. Maybe you're at a friend's place and want to spin up a Haiku researcher on your home PC.
+
+Kewky Agents is a web-based control panel that makes all of that work. It runs on your machine (or any machine), spawns agents as real terminal processes, and gives you a browser UI to manage them. Since it's a web server, anyone with the URL can connect — your phone on the same wifi, your tablet over Tailscale, or another machine across the internet.
+
+**What it is right now:**
+- A multi-platform agent launcher with one-click presets
+- A real-time status monitor that watches agent terminal output
+- A full browser-based terminal (xterm.js) so you can interact with any agent from any device
+- A cross-platform spawner that can launch agents locally, inside WSL, or on remote machines over SSH
+- A research deployment tool for sending multiple agents to investigate a topic in parallel
+
+**What it is not (yet):**
+- There's no inter-agent communication system. We had one, ripped it out — stdin injection is janky and unreliable. The plan is to build proper comms later, likely through Discord bots where each agent gets its own identity and they can DM each other in channels. That's a future feature.
+- There's no authentication on the dashboard itself. If someone can reach the port, they can control your agents. Use Tailscale, a VPN, or firewall rules to limit access.
 
 ## Quick Start
 
@@ -15,91 +32,79 @@ Then tell your AI assistant:
 
 That's it. Your AI reads the setup guides, installs what's needed, and gets everything running.
 
----
+Or do it manually:
 
-## What This Does
+```bash
+npm install
+npm start
+# Open http://localhost:3847
+```
 
-Kewky Agents is a command center for running multiple AI coding agents simultaneously. Think of it as a process manager with a web UI, purpose-built for AI CLI tools.
+## Why This Exists
 
-You can:
-- **Launch agents** with one click from preset configurations
-- **Monitor status** — see which agents are working, idle, thinking, or stuck
-- **Read output** — tail logs or open a full interactive terminal in your browser
-- **Send commands** — type instructions directly into any agent's stdin
-- **Coordinate teams** — agents can discover each other and exchange messages
-- **Span machines** — run agents on your PC, Mac, Linux box, or Raspberry Pi over SSH
+AI CLI tools are great, but they each run in one terminal on one machine. When you want to run five agents across two machines and check on them from your phone, you're juggling SSH sessions, tmux panes, and hoping you remember which terminal is which.
+
+This dashboard gives you:
+
+**One place to launch everything** — Click a button, agent starts. Preset configs for every model and role combo you use.
+
+**Real-time visibility from any device** — Every agent's status (working, idle, thinking, stuck, error) updates live in the browser. Open it on your phone and you see what all your agents are doing right now.
+
+**Full terminal access from anywhere** — Click ATTACH on any agent card and you get a real interactive terminal in your browser. Send commands, read output, interact exactly like you would in a local terminal. Works on mobile.
+
+**Agents across machines** — Your Windows PC runs Opus and Codex. Your Mac runs Sonnet. Your Pi runs Haiku. All show up in one dashboard, all controllable from one URL.
 
 ## How It Works
 
-### The Dashboard Server
-
-A Node.js server (`server.js`) manages everything:
-
-- **`node-pty`** spawns each agent as a pseudo-terminal process — the same thing your terminal emulator uses. Agents think they're running in a normal terminal.
-- **WebSocket connections** push live status updates to the browser UI every 3 seconds.
-- **Status detection** (`src/detect.js`) reads the last few lines of each agent's terminal output and pattern-matches to determine state: `working`, `idle`, `thinking`, `waiting_approval`, `error`, etc. No agent modification needed — it watches what they print.
-- **REST API** lets agents (or scripts, or other tools) query who's running and send messages programmatically.
-
 ### Agent Spawning
 
-When you click a preset button or call the API:
+Each agent is a real pseudo-terminal process (via `node-pty`). The agent CLI thinks it's running in a normal terminal — because it is. The dashboard just wraps it with output capture and a WebSocket bridge for the browser.
 
-1. The server looks up the agent config (launch command, model, environment variables)
-2. It spawns a PTY process with the appropriate shell:
-   - **Native**: `cmd.exe /c <command>` on Windows, `$SHELL -c <command>` on Mac/Linux
-   - **WSL**: `wsl.exe -d Ubuntu-24.04 -- bash -l -c <command>` (Windows only)
-   - **SSH**: `ssh -t user@host <wrapped-command>` with OS-aware wrapping:
-     - Linux targets: `bash -l -c 'command'`
-     - macOS targets: `bash -l -c` with Homebrew PATH setup
-     - Windows targets: command passed directly to cmd.exe
-3. Output is captured into a ring buffer (ANSI-stripped for status detection, raw for terminal replay)
-4. The browser gets notified of the new session
+Spawning adapts to the target platform:
+- **Local (native)**: `cmd.exe /c` on Windows, `$SHELL -c` on Mac/Linux
+- **WSL**: `wsl.exe -d Ubuntu-24.04 -- bash -l -c` (Windows hosts only)
+- **SSH to Linux**: `ssh -t user@host bash -l -c 'command'`
+- **SSH to macOS**: same, but with Homebrew PATH setup
+- **SSH to Windows**: `ssh -t user@host command` (OpenSSH uses cmd.exe)
 
-### Inter-Agent Communication
+### Status Detection
 
-Agents can discover and message each other through the dashboard API:
+The dashboard reads the last few lines of each agent's terminal output every 3 seconds and pattern-matches to determine state. No modification to the agents needed — it just watches what they print:
 
-- `GET /api/agents` — returns all active agents with their status, type, platform, and host
-- `POST /api/send` — delivers a message to an agent's terminal stdin, formatted as `[MSG from <sender>]: <message>`
-- `GET /api/messages` — audit log of the last 500 inter-agent messages
+- Claude spinning? → `working`
+- Codex showing `>`? → `idle`
+- Gemini says "Type your message"? → `idle`
+- Error in the last line? → `error`
+- Asking for permission? → `waiting_approval`
 
-The `AGENT_DASHBOARD_URL` environment variable is injected into every spawned session, so agents know where to reach the API.
+### Browser Terminal
 
-### Team Coordination
-
-The dashboard can auto-launch a **team lead** agent (an Opus instance with a coordination prompt) that:
-
-1. Receives a mission briefing from you
-2. Decomposes it into subtasks
-3. Launches worker agents via the API
-4. Monitors their progress through status polling
-5. Sends corrective guidance when agents get stuck
-6. Synthesizes outputs into a final deliverable
+When you click ATTACH, the browser opens an xterm.js terminal connected to the agent's PTY via WebSocket. Full bidirectional I/O — keystrokes go to the agent, output streams back. Multiple clients can watch the same session simultaneously. Works on desktop and mobile browsers.
 
 ### Research Missions
 
-The Research tab lets you deploy multiple agents on a research topic simultaneously. Each agent independently investigates and writes findings to a shared output directory. Results are viewable as a combined report in the browser.
+The Research tab lets you select multiple agents, give them a research topic, and deploy them all at once. Each agent independently investigates and writes findings to a shared output directory. When they're done, the dashboard combines their reports into a viewable document.
 
 ## What Gets Sent Where
 
-**Full transparency on data flow:**
+**Full transparency:**
 
-- **Agent CLI tools** (claude, codex, gemini) connect to their respective cloud APIs (Anthropic, OpenAI, Google) using OAuth tokens from your subscription. The dashboard does not touch these connections.
-- **The dashboard server** runs locally on your machine. It does not phone home, collect telemetry, or send data anywhere.
-- **SSH spawning** opens standard SSH connections to your configured remote hosts. Commands and output travel over your SSH tunnel.
-- **The browser UI** connects to the local dashboard server via WebSocket. No external CDNs or analytics — all static assets are bundled locally (xterm.js, marked.js).
-- **No API keys are used or stored.** All AI access is through OAuth/subscription authentication managed by each CLI tool independently.
+- **Agent CLIs** connect to their cloud APIs (Anthropic, OpenAI, Google) using OAuth tokens from your subscription. The dashboard doesn't touch these connections.
+- **The dashboard server** runs on your machine. No telemetry, no phone-home, no analytics.
+- **SSH sessions** are standard SSH connections to your configured remote hosts.
+- **The browser UI** loads from the dashboard server. All static assets (xterm.js, marked.js) are bundled locally — no CDNs.
+- **No API keys** anywhere. All AI access is through OAuth/subscription auth managed by each CLI tool.
 
 ## Prerequisites
 
-- **Node.js 18+** with native addon support (for `node-pty` compilation)
+- **Node.js 18+** with native addon support (for `node-pty`)
 - **Git** on PATH
 - **At least one AI CLI tool** installed and authenticated:
-  - Claude CLI: `npm i -g @anthropic-ai/claude-code` → run `claude` to OAuth
-  - Codex CLI: `npm i -g @openai/codex` → run `codex` to OAuth
-  - Gemini CLI: `npm i -g @google/gemini-cli` → run `gemini` to OAuth
+  - Claude: `npm i -g @anthropic-ai/claude-code` then `claude` to sign in
+  - Codex: `npm i -g @openai/codex` then `codex` to sign in
+  - Gemini: `npm i -g @google/gemini-cli` then `gemini` to sign in
 
-### Platform Build Tools (for node-pty)
+### Build Tools (for node-pty native compilation)
 
 | Platform | Requirement |
 |----------|-------------|
@@ -107,90 +112,77 @@ The Research tab lets you deploy multiple agents on a research topic simultaneou
 | **macOS** | `xcode-select --install` |
 | **Linux** | `sudo apt install build-essential python3` |
 
-## Install & Run
-
-```bash
-git clone https://github.com/KewkLW/kewky-agents.git
-cd kewky-agents
-npm install
-npm start
-```
-
-Open `http://localhost:3847`
-
 ## Configuration
 
-Copy `.env.example` to `.env` and adjust:
+Copy `.env.example` to `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-### Core Settings
+### Core
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AGENT_DASH_PORT` | `3847` | Server port |
-| `TAILSCALE_HOST` | `localhost` | Hostname for remote terminal URLs |
-| `CODEX_HOME` | `~/.codex` | Codex config dir (primary account) |
-| `CODEX_HOME_ALT` | `~/.codex-account-b` | Codex config dir (alt account) |
+| `TAILSCALE_HOST` | `localhost` | Hostname for remote terminal URLs (set to Tailscale IP for mobile access) |
 
-### Cross-Platform Spawning
+### Remote Machines (SSH)
 
-#### WSL (Windows only)
-
-Agents can spawn inside WSL. Presets appear automatically when WSL is detected.
+Spawn agents on other machines. Format: `REMOTE_HOST_<NAME>=user@host:port:os`
 
 ```bash
-WSL_DISTRO=Ubuntu-24.04   # Which distro to use
-```
-
-The CLI tools must be installed inside the WSL distro, not just on the Windows side.
-
-#### SSH Remote Hosts
-
-Spawn agents on other machines over SSH.
-
-```bash
-# Format: REMOTE_HOST_<NAME>=user@host:port:os
 REMOTE_HOST_PC=kewkd@192.168.1.10:22:windows
 REMOTE_HOST_MAC=user@macbook.local:22:macos
 REMOTE_HOST_PI=pi@raspberrypi.local:22:linux
 ```
 
-The `os` field (`windows`, `macos`, `linux`) tells the dashboard how to wrap commands on the remote end. Port defaults to `22`, OS defaults to `linux`.
+The `os` field tells the dashboard how to wrap commands on the remote end. Defaults to `linux` if omitted.
 
-**Remote machine requirements:**
-1. SSH server enabled with key-based auth
-2. Node.js + at least one CLI tool installed and OAuth'd
+Each remote machine needs: SSH server with key auth, Node.js, and at least one CLI tool installed and signed in. See `docs/` for per-agent setup guides.
 
-See `docs/setup-*.md` for per-agent remote setup instructions.
+### WSL (Windows only)
 
-## Settings Tab
+```bash
+WSL_DISTRO=Ubuntu-24.04
+```
 
-The browser UI includes a Settings tab where you can toggle features on/off:
+WSL presets appear automatically when WSL is detected. CLI tools must be installed inside the WSL distro.
 
-| Toggle | What it controls |
-|--------|-----------------|
-| WSL Presets | Show/hide WSL agent launch buttons |
-| Remote Hosts | Show/hide SSH remote agent presets |
-| Research Tab | Show/hide the research mission deployment tab |
-| Team Comms | Show/hide inter-agent message feed on cards |
-| Advanced Launch | Show/hide the manual launch form with custom flags |
+## Mobile Access
+
+Set `TAILSCALE_HOST` to your machine's Tailscale hostname or local IP. Open `http://that-hostname:3847` on your phone. You get the full dashboard — launch agents, monitor status, open interactive terminals, all from mobile.
+
+For access outside your local network, use [Tailscale](https://tailscale.com) (free for personal use) to create a secure tunnel. No port forwarding needed.
+
+## Settings
+
+The Settings tab in the browser lets you toggle features:
+
+| Toggle | Controls |
+|--------|----------|
+| WSL Presets | WSL agent launch buttons |
+| Remote Hosts | SSH remote agent presets |
+| Research Tab | Multi-agent research deployment |
+| Advanced Launch | Manual launch form with custom flags |
 
 Settings persist in your browser's localStorage.
 
-## API Reference
+## API
+
+The dashboard exposes a REST API that agents and scripts can use:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/config` | GET | Dashboard configuration and platform info |
+| `/api/config` | GET | Dashboard config and platform info |
 | `/api/agents` | GET | Active agents with status, type, platform |
 | `/api/team/status` | GET | All session statuses |
 | `/api/team/launch` | POST | Launch agent: `{ agent, role, platform, host }` |
-| `/api/team/send` | POST | Send to session: `{ session, message }` |
+| `/api/team/send` | POST | Send to session stdin: `{ session, message }` |
 | `/api/team/output/:session` | GET | Read agent output |
 | `/api/team/kill` | POST | Kill session: `{ session }` |
+
+`AGENT_DASHBOARD_URL` is injected into every spawned agent's environment so they can reach the API.
 
 ## Architecture
 
@@ -204,7 +196,6 @@ src/research.js        Multi-agent research missions
 src/auto-nudge.js      Auto-nudge idle agents
 src/auto-distribute.js Task auto-distribution
 src/worktree.js        Git worktree detection
-src/comms.js           Team communication polling
 public/                Static frontend (app.js, terminal.html, styles)
 docs/                  Agent CLI setup guides
 ```
