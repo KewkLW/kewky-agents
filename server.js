@@ -3,7 +3,7 @@ const http = require('http');
 const { WebSocketServer } = require('ws');
 const path = require('path');
 
-const { PORT, POLL_INTERVAL, TAILSCALE_HOST, AGENTS, PRESETS } = require('./src/config');
+const { PORT, POLL_INTERVAL, TAILSCALE_HOST, WSL_DISTRO, USER_HOME, AGENTS, PRESETS } = require('./src/config');
 const tmux = require('./src/tmux');
 const { parseSessionInfo } = require('./src/detect');
 const { detectWorktree } = require('./src/worktree');
@@ -27,7 +27,11 @@ const debugLogs = [];
 const MAX_DEBUG_LOGS = 200;
 
 app.get('/api/config', (req, res) => {
-  res.json({ presets: PRESETS, agents: Object.keys(AGENTS), tailscaleHost: TAILSCALE_HOST });
+  const agentDetails = {};
+  for (const [name, cfg] of Object.entries(AGENTS)) {
+    agentDetails[name] = { model: cfg.model, type: cfg.type };
+  }
+  res.json({ presets: PRESETS, agents: Object.keys(AGENTS), agentDetails, tailscaleHost: TAILSCALE_HOST });
 });
 
 // Team lead API — get all agent statuses
@@ -67,7 +71,7 @@ app.post('/api/team/launch', async (req, res) => {
     return res.status(400).json({ error: `Unknown agent: ${agent}` });
   }
   const name = sessionName || `${role || 'agent'}-${agent}-${Date.now().toString(36).slice(-4)}`;
-  const dir = workdir || 'C:\\Users\\kewkd';
+  const dir = workdir || USER_HOME;
   let launchCmd = agentConfig.launchCmd;
   if (flags) launchCmd += ' ' + flags;
   if (agentConfig.env) {
@@ -209,7 +213,7 @@ ptyWss.on('connection', (ws, req) => {
   console.log(`// PTY_CONNECT: ${session} (${cols}x${rows})`);
 
   // Spawn wsl tmux attach
-  const shell = pty.spawn('wsl.exe', ['-d', 'Ubuntu-24.04', '--', 'tmux', 'attach-session', '-t', session], {
+  const shell = pty.spawn('wsl.exe', ['-d', WSL_DISTRO, '--', 'tmux', 'attach-session', '-t', session], {
     name: 'xterm-256color',
     cols,
     rows,
@@ -298,7 +302,7 @@ async function handleLaunch(ws, msg) {
   }
 
   const name = sessionName || `${role || 'agent'}-${agent}-${Date.now().toString(36).slice(-4)}`;
-  const dir = workdir || 'C:\\Users\\kewkd';
+  const dir = workdir || USER_HOME;
 
   // Build launch command with env vars if needed
   let launchCmd = agentConfig.launchCmd;
@@ -380,23 +384,23 @@ function handleRawInput(ws, msg) {
   const { exec } = require('child_process');
   // Use send-keys -l for literal text, but handle special keys separately
   if (data === '\r' || data === '\n') {
-    exec(`wsl -d Ubuntu-24.04 bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' Enter"`, { windowsHide: true });
+    exec(`wsl -d ${WSL_DISTRO} bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' Enter"`, { windowsHide: true });
   } else if (data === '\x7f' || data === '\b') {
-    exec(`wsl -d Ubuntu-24.04 bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' BSpace"`, { windowsHide: true });
+    exec(`wsl -d ${WSL_DISTRO} bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' BSpace"`, { windowsHide: true });
   } else if (data === '\x03') {
-    exec(`wsl -d Ubuntu-24.04 bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' C-c"`, { windowsHide: true });
+    exec(`wsl -d ${WSL_DISTRO} bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' C-c"`, { windowsHide: true });
   } else if (data === '\x1b') {
-    exec(`wsl -d Ubuntu-24.04 bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' Escape"`, { windowsHide: true });
+    exec(`wsl -d ${WSL_DISTRO} bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' Escape"`, { windowsHide: true });
   } else if (data.startsWith('\x1b[')) {
     // Arrow keys and other escape sequences
     const keyMap = { '\x1b[A': 'Up', '\x1b[B': 'Down', '\x1b[C': 'Right', '\x1b[D': 'Left' };
     const key = keyMap[data];
     if (key) {
-      exec(`wsl -d Ubuntu-24.04 bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' ${key}"`, { windowsHide: true });
+      exec(`wsl -d ${WSL_DISTRO} bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' ${key}"`, { windowsHide: true });
     }
   } else {
     // Regular text — send literally
-    exec(`wsl -d Ubuntu-24.04 bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' -l '${escaped}'"`, { windowsHide: true });
+    exec(`wsl -d ${WSL_DISTRO} bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' -l '${escaped}'"`, { windowsHide: true });
   }
 }
 
@@ -405,7 +409,7 @@ function handleAttach(ws, msg) {
   if (!session) return;
   const escaped = session.replace(/'/g, "''");
   // Open Windows Terminal tab with WSL tmux attach
-  const cmd = `wt -w 0 new-tab --title "${escaped}" -- wsl -d Ubuntu-24.04 tmux attach-session -t '${escaped}'`;
+  const cmd = `wt -w 0 new-tab --title "${escaped}" -- wsl -d ${WSL_DISTRO} tmux attach-session -t '${escaped}'`;
   require('child_process').exec(cmd, { windowsHide: false, shell: 'cmd.exe' });
   ws.send(JSON.stringify({ type: 'event', event: 'session_attached', data: { session } }));
   console.log(`// ATTACH_WT: ${session}`);
@@ -481,7 +485,7 @@ async function handleTeamBrief(ws, msg) {
     // Auto-launch team lead
     const agentConfig = AGENTS['team-lead'];
     leadSession = `team-lead-${Date.now().toString(36).slice(-4)}`;
-    const dir = workdir || 'C:\\Users\\kewkd';
+    const dir = workdir || USER_HOME;
     const ok = await tmux.createSession(leadSession, dir, agentConfig.launchCmd);
     if (!ok) {
       ws.send(JSON.stringify({ type: 'event', event: 'error', data: { message: 'Failed to launch team lead' } }));

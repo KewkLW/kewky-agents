@@ -63,7 +63,7 @@ let xtermInstances = {};
 let pendingKill = null;
 let missions = [];
 let missionElements = {};
-let TAILSCALE_HOST = 'kewk-1';
+let TAILSCALE_HOST = 'localhost';
 let teamComms = null;
 
 // ============================================
@@ -494,16 +494,16 @@ function initLaunchPanel() {
     .then(r => r.json())
     .then(config => {
       renderPresets(presetsGrid, config.presets);
+      populateAgentDropdown(config.agents);
+      populateAgentSelector(config.agentDetails || {});
     })
     .catch(() => {
       // Fallback presets
       const fallbackPresets = [
-        { label: 'CODEX_BUILDER', agent: 'codex', role: 'builder', icon: '>' },
-        { label: 'OPUS_BUILDER', agent: 'opus', role: 'builder', icon: '◆' },
-        { label: 'SONNET_BUILDER', agent: 'sonnet', role: 'builder', icon: '◇' },
-        { label: 'GEMINI_BUILDER', agent: 'gemini', role: 'builder', icon: '▲' },
-        { label: 'HAIKU_RESEARCHER', agent: 'haiku', role: 'researcher', icon: '◎' },
-        { label: 'CODEX_REVIEWER', agent: 'codex', role: 'reviewer', icon: '⊡' }
+        { label: 'OPUS_BUILDER', agent: 'opus', role: 'builder', icon: '\u25C6' },
+        { label: 'SONNET_BUILDER', agent: 'sonnet', role: 'builder', icon: '\u25C7' },
+        { label: 'GEMINI_BUILDER', agent: 'gemini', role: 'builder', icon: '\u25B2' },
+        { label: 'HAIKU_RESEARCHER', agent: 'haiku', role: 'researcher', icon: '\u25CE' }
       ];
       renderPresets(presetsGrid, fallbackPresets);
     });
@@ -533,6 +533,41 @@ function initLaunchPanel() {
       flags: flags || undefined
     });
   });
+}
+
+function populateAgentDropdown(agents) {
+  const select = document.getElementById('launch-agent');
+  select.innerHTML = '';
+  for (const name of agents) {
+    if (name === 'team-lead') continue; // team-lead uses preset
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name.toUpperCase();
+    select.appendChild(opt);
+  }
+}
+
+function populateAgentSelector(agentDetails) {
+  const container = document.getElementById('agent-selector');
+  if (!container || Object.keys(agentDetails).length === 0) return;
+
+  const ICONS = { opus: '\u25C6', sonnet: '\u25C7', haiku: '\u25CE', gemini: '\u25B2' };
+  container.innerHTML = '';
+
+  for (const [name, details] of Object.entries(agentDetails)) {
+    if (name === 'team-lead') continue;
+    const icon = ICONS[name] || '>';
+    const label = document.createElement('label');
+    label.className = 'agent-checkbox';
+    label.innerHTML = `
+      <input type="checkbox" value="${escHtml(name)}">
+      <span class="agent-check-box"></span>
+      <span class="agent-check-icon">${icon}</span>
+      <span class="agent-check-label">${escHtml(name.toUpperCase())}</span>
+      <span class="agent-check-model">${escHtml(details.model || '')}</span>
+    `;
+    container.appendChild(label);
+  }
 }
 
 function renderPresets(container, presets) {

@@ -1,2 +1,5 @@
 node_modules/
 .worktrees/
+logs/
+.env
+server-debug.log

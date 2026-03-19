@@ -1,6 +1,15 @@
+const os = require('os');
+const path = require('path');
+
 const PORT = process.env.AGENT_DASH_PORT || 3847;
 const POLL_INTERVAL = 3000;
-const TAILSCALE_HOST = process.env.TAILSCALE_HOST || 'kewk';
+const TAILSCALE_HOST = process.env.TAILSCALE_HOST || 'localhost';
+const WSL_DISTRO = process.env.WSL_DISTRO || 'Ubuntu-24.04';
+const ACTIVE_TEAM = process.env.ACTIVE_TEAM || '';
+const TEAMS_MCP_PATH = process.env.TEAMS_MCP_PATH || '';
+const USER_HOME = process.env.USERPROFILE || os.homedir();
+const CODEX_HOME_PRIMARY = process.env.CODEX_HOME || path.join(USER_HOME, '.codex');
+const CODEX_HOME_ALT = process.env.CODEX_HOME_ALT || path.join(USER_HOME, '.codex-account-b');
 
 const AGENTS = {
   opus: {
@@ -27,7 +36,7 @@ You have access to claude-teams MCP tools for task management and messaging.
 When you receive a mission briefing, decompose it into subtasks and distribute to available agents.
 Use the dashboard to monitor progress. Be decisive and direct in your coordination.
 
-Available agents: opus (builder), sonnet (builder), haiku (researcher), kewk-codex (builder/reviewer), lilkewk-codex (builder), gemini (builder), codex-nano (subagent/search), codex-mini (subagent/worker)
+Available agents: opus (builder), sonnet (builder), haiku (researcher), codex-primary (builder/reviewer), codex-alt (builder), gemini (builder), codex-nano (subagent/search), codex-mini (subagent/worker)
 
 Respond with your coordination plan when given an objective.`
   },
@@ -43,31 +52,31 @@ Respond with your coordination plan when given an objective.`
     readyIndicator: /Try|context left/,
     type: 'claude'
   },
-  'kewk-codex': {
+  'codex-primary': {
     model: 'gpt-5.4-codex',
     launchCmd: 'codex --yolo',
-    env: { CODEX_HOME: 'C:\\Users\\kewkd\\.codex' },
+    env: { CODEX_HOME: CODEX_HOME_PRIMARY },
     readyIndicator: /›|codex/i,
     type: 'codex'
   },
-  'lilkewk-codex': {
+  'codex-alt': {
     model: 'gpt-5.4-codex',
     launchCmd: 'codex --yolo',
-    env: { CODEX_HOME: 'C:\\Users\\kewkd\\.codex-account-b' },
+    env: { CODEX_HOME: CODEX_HOME_ALT },
     readyIndicator: /›|codex/i,
     type: 'codex'
   },
   'codex-nano': {
     model: 'gpt-5.4-nano',
     launchCmd: 'codex --yolo --model gpt-5.4-nano',
-    env: { CODEX_HOME: 'C:\\Users\\kewkd\\.codex' },
+    env: { CODEX_HOME: CODEX_HOME_PRIMARY },
     readyIndicator: /›|codex/i,
     type: 'codex'
   },
   'codex-mini': {
     model: 'gpt-5.4-mini',
     launchCmd: 'codex --yolo --model gpt-5.4-mini',
-    env: { CODEX_HOME: 'C:\\Users\\kewkd\\.codex' },
+    env: { CODEX_HOME: CODEX_HOME_PRIMARY },
     readyIndicator: /›|codex/i,
     type: 'codex'
   },
@@ -81,16 +90,20 @@ Respond with your coordination plan when given an objective.`
 };
 
 const PRESETS = [
-  { label: 'TEAM_LEAD', agent: 'team-lead', role: 'team-lead', icon: '★' },
-  { label: 'KEWK_CODEX', agent: 'kewk-codex', role: 'builder', icon: '>' },
-  { label: 'LILKEWK_CODEX', agent: 'lilkewk-codex', role: 'builder', icon: '»' },
-  { label: 'OPUS_BUILDER', agent: 'opus', role: 'builder', icon: '◆' },
-  { label: 'SONNET_BUILDER', agent: 'sonnet', role: 'builder', icon: '◇' },
-  { label: 'GEMINI_BUILDER', agent: 'gemini', role: 'builder', icon: '▲' },
-  { label: 'HAIKU_RESEARCHER', agent: 'haiku', role: 'researcher', icon: '◎' },
-  { label: 'CODEX_NANO', agent: 'codex-nano', role: 'subagent', icon: '·' },
-  { label: 'CODEX_MINI', agent: 'codex-mini', role: 'subagent', icon: '○' },
-  { label: 'KEWK_REVIEWER', agent: 'kewk-codex', role: 'reviewer', icon: '⊡' }
+  { label: 'TEAM_LEAD', agent: 'team-lead', role: 'team-lead', icon: '\u2605' },
+  { label: 'CODEX_PRIMARY', agent: 'codex-primary', role: 'builder', icon: '>' },
+  { label: 'CODEX_ALT', agent: 'codex-alt', role: 'builder', icon: '\u00BB' },
+  { label: 'OPUS_BUILDER', agent: 'opus', role: 'builder', icon: '\u25C6' },
+  { label: 'SONNET_BUILDER', agent: 'sonnet', role: 'builder', icon: '\u25C7' },
+  { label: 'GEMINI_BUILDER', agent: 'gemini', role: 'builder', icon: '\u25B2' },
+  { label: 'HAIKU_RESEARCHER', agent: 'haiku', role: 'researcher', icon: '\u25CE' },
+  { label: 'CODEX_NANO', agent: 'codex-nano', role: 'subagent', icon: '\u00B7' },
+  { label: 'CODEX_MINI', agent: 'codex-mini', role: 'subagent', icon: '\u25CB' },
+  { label: 'CODEX_REVIEWER', agent: 'codex-primary', role: 'reviewer', icon: '\u22A1' }
 ];
 
-module.exports = { PORT, POLL_INTERVAL, TAILSCALE_HOST, AGENTS, PRESETS };
+module.exports = {
+  PORT, POLL_INTERVAL, TAILSCALE_HOST, WSL_DISTRO,
+  ACTIVE_TEAM, TEAMS_MCP_PATH, USER_HOME,
+  AGENTS, PRESETS
+};

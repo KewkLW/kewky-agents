@@ -46,12 +46,7 @@
           <div class="form-group">
             <label class="form-label">// AGENT</label>
             <select id="launch-agent" class="form-input">
-              <option value="kewk-codex">KEWK-CODEX</option>
-              <option value="lilkewk-codex">LILKEWK-CODEX</option>
-              <option value="opus">OPUS</option>
-              <option value="sonnet">SONNET</option>
-              <option value="haiku">HAIKU</option>
-              <option value="gemini">GEMINI</option>
+              <!-- populated dynamically from /api/config -->
             </select>
           </div>
           <div class="form-group">
@@ -140,48 +135,7 @@
           <span class="section-label">02 / SELECT_AGENTS</span>
         </div>
         <div id="agent-selector" class="agent-selector">
-          <label class="agent-checkbox">
-            <input type="checkbox" value="kewk-codex" checked>
-            <span class="agent-check-box"></span>
-            <span class="agent-check-icon">></span>
-            <span class="agent-check-label">KEWK-CODEX</span>
-            <span class="agent-check-model">GPT-5.3-Codex</span>
-          </label>
-          <label class="agent-checkbox">
-            <input type="checkbox" value="lilkewk-codex">
-            <span class="agent-check-box"></span>
-            <span class="agent-check-icon">»</span>
-            <span class="agent-check-label">LILKEWK-CODEX</span>
-            <span class="agent-check-model">GPT-5.3-Codex (Alt)</span>
-          </label>
-          <label class="agent-checkbox">
-            <input type="checkbox" value="opus">
-            <span class="agent-check-box"></span>
-            <span class="agent-check-icon">◆</span>
-            <span class="agent-check-label">OPUS</span>
-            <span class="agent-check-model">Claude Opus 4.6</span>
-          </label>
-          <label class="agent-checkbox">
-            <input type="checkbox" value="sonnet">
-            <span class="agent-check-box"></span>
-            <span class="agent-check-icon">◇</span>
-            <span class="agent-check-label">SONNET</span>
-            <span class="agent-check-model">Claude Sonnet 4.5</span>
-          </label>
-          <label class="agent-checkbox">
-            <input type="checkbox" value="haiku" checked>
-            <span class="agent-check-box"></span>
-            <span class="agent-check-icon">◎</span>
-            <span class="agent-check-label">HAIKU</span>
-            <span class="agent-check-model">Claude Haiku 4.5</span>
-          </label>
-          <label class="agent-checkbox">
-            <input type="checkbox" value="gemini">
-            <span class="agent-check-box"></span>
-            <span class="agent-check-icon">▲</span>
-            <span class="agent-check-label">GEMINI</span>
-            <span class="agent-check-model">Gemini 3 Pro</span>
-          </label>
+          <!-- populated dynamically from /api/config -->
         </div>
 
         <div class="form-row" style="margin-top:12px">

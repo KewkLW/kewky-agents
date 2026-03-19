@@ -4,6 +4,7 @@
  */
 
 const tmux = require('./tmux');
+const { ACTIVE_TEAM } = require('./config');
 
 // Track how long each session has been idle
 const idleTimers = {};  // { sessionName: { status, since, nudged } }
@@ -52,7 +53,8 @@ function checkAndNudge(sessions) {
 }
 
 async function nudgeAgent(sessionName) {
-  const prompt = 'Continue working on your assigned tasks. If you finished your current task, check your inbox for new assignments: call read_inbox with team_name="soundscape-crew" and your agent name.';
+  const teamRef = ACTIVE_TEAM ? ` call read_inbox with team_name="${ACTIVE_TEAM}" and your agent name.` : '';
+  const prompt = `Continue working on your assigned tasks. If you finished your current task, check your inbox for new assignments:${teamRef}`;
   await tmux.sendKeys(sessionName, prompt);
 }
 

@@ -1,7 +1,7 @@
 param(
   [int]$Port = 80,
-  [string]$ProjectRoot = "F:\agent-dashboard",
-  [string]$LogDir = "F:\agent-dashboard\logs"
+  [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
+  [string]$LogDir = (Join-Path (Split-Path -Parent $PSScriptRoot) "logs")
 )
 
 $ErrorActionPreference = "Stop"

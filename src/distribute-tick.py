@@ -1,11 +1,17 @@
-import sys, json
-sys.path.insert(0, 'F:/claude-code-teams-mcp/src')
+import sys, json, os
+
+teams_mcp_path = os.environ.get('TEAMS_MCP_PATH', '')
+if teams_mcp_path:
+    sys.path.insert(0, os.path.join(teams_mcp_path, 'src'))
 
 from claude_teams import tasks, distributor, messaging
 from claude_teams.teams import read_config
 from claude_teams.models import TeammateMember
 
-TEAM = 'soundscape-crew'
+TEAM = os.environ.get('ACTIVE_TEAM', '')
+if not TEAM:
+    print(json.dumps({"error": "ACTIVE_TEAM not set"}))
+    sys.exit(0)
 
 try:
     config = read_config(TEAM)

@@ -1,7 +1,7 @@
 param(
   [string]$TaskName = "AgentDashboard-Autostart",
   [int]$Port = 80,
-  [string]$ProjectRoot = "F:\agent-dashboard",
+  [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
   [switch]$RunNow
 )
 

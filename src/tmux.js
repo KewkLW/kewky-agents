@@ -1,8 +1,9 @@
 const { exec } = require('child_process');
+const { WSL_DISTRO, USER_HOME } = require('./config');
 
 function wslExec(cmd, timeoutMs = 10000) {
   return new Promise((resolve) => {
-    const child = exec(`wsl -d Ubuntu-24.04 bash -c ${JSON.stringify(cmd)}`, {
+    const child = exec(`wsl -d ${WSL_DISTRO} bash -c ${JSON.stringify(cmd)}`, {
       timeout: timeoutMs,
       encoding: 'utf8',
       windowsHide: true
@@ -80,7 +81,7 @@ async function sendSpecialKey(sessionName, key) {
 }
 
 function windowsToWslPath(winPath) {
-  if (!winPath) return '/mnt/c/Users/kewkd';
+  if (!winPath) return windowsToWslPath(USER_HOME);
   const normalized = winPath.replace(/\\/g, '/');
   const match = normalized.match(/^([A-Za-z]):\/(.*)/);
   if (match) {
