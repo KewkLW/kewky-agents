@@ -11,7 +11,6 @@ const sessions = require('./src/sessions');
 const { parseSessionInfo } = require('./src/detect');
 const { detectWorktree } = require('./src/worktree');
 const research = require('./src/research');
-const comms = require('./src/comms');
 const { runDistributor } = require('./src/auto-distribute');
 const { checkAndNudge } = require('./src/auto-nudge');
 
@@ -19,10 +18,6 @@ const { checkAndNudge } = require('./src/auto-nudge');
 const localPlatform = detectLocalPlatform();
 const wslInfo = detectWSL();
 const remoteHostNames = Object.keys(REMOTE_HOSTS);
-
-// Inter-agent message audit log
-const messageLog = [];
-const MAX_MESSAGE_LOG = 500;
 
 const app = express();
 app.use(express.json());
@@ -159,7 +154,7 @@ app.get('/api/debug', (req, res) => {
   res.json(debugLogs);
 });
 
-// ---- Agent Discovery & Messaging API ----
+// ---- Agent Discovery API ----
 
 app.get('/api/agents', (req, res) => {
   const agents = previousState.map(s => ({
@@ -173,38 +168,6 @@ app.get('/api/agents', (req, res) => {
     workdir: s.workdir
   }));
   res.json({ agents, timestamp: Date.now() });
-});
-
-app.post('/api/send', (req, res) => {
-  const { from, to, message } = req.body;
-  if (!from || !to || !message) {
-    return res.status(400).json({ error: 'from, to, and message required' });
-  }
-
-  // Find target session by name (exact or partial match)
-  const targetSession = previousState.find(s =>
-    s.name === to || s.name.includes(to)
-  );
-  if (!targetSession) {
-    return res.status(404).json({ error: `No active session matching: ${to}` });
-  }
-
-  const formatted = `[MSG from ${from}]: ${message}`;
-  const ok = sessions.write(targetSession.name, formatted + '\r');
-  if (!ok) {
-    return res.status(500).json({ error: `Failed to write to session: ${targetSession.name}` });
-  }
-
-  const entry = { from, to: targetSession.name, message, timestamp: Date.now() };
-  messageLog.push(entry);
-  if (messageLog.length > MAX_MESSAGE_LOG) messageLog.shift();
-
-  console.log(`// MSG: ${from} -> ${targetSession.name}: ${message.slice(0, 60)}`);
-  res.json({ ok: true, delivered: targetSession.name });
-});
-
-app.get('/api/messages', (req, res) => {
-  res.json({ messages: messageLog, count: messageLog.length });
 });
 
 app.get('/debug', (req, res) => {
@@ -609,16 +572,6 @@ async function pollAndBroadcast() {
     const distResult = runDistributor();
     if (distResult && distResult.assignments && distResult.assignments.length > 0) {
       broadcast({ type: 'event', event: 'tasks_distributed', data: distResult });
-    }
-
-    // Poll team comms
-    const teamComms = comms.getAllComms();
-    if (teamComms.teams.length > 0) {
-      broadcast({ type: 'comms', comms: teamComms });
-    }
-    // Toast new messages
-    for (const msg of teamComms.newMessages) {
-      broadcast({ type: 'event', event: 'team_message', data: msg });
     }
 
     // Send output to subscribed clients

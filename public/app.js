@@ -64,7 +64,6 @@ let pendingKill = null;
 let missions = [];
 let missionElements = {};
 let TAILSCALE_HOST = 'localhost';
-let teamComms = null;
 
 // ============================================
 // WEBSOCKET
@@ -95,11 +94,6 @@ function connect() {
         break;
       case 'research_state':
         handleResearchState(msg.missions);
-        break;
-      case 'comms':
-        teamComms = msg.comms;
-        renderCommsInCards();
-        renderTeamFeed();
         break;
       case 'report':
         showReportModal(msg.report);
@@ -198,9 +192,6 @@ function handleEvent(event, data) {
     case 'error':
       showToast(`ERROR: ${data.message}`, 'error');
       break;
-    case 'team_message':
-      showToast(`◈ ${data.from} → ${data.to}: ${data.text.slice(0, 60)}`, 'success');
-      break;
     case 'tasks_distributed':
       for (const a of (data.assignments || [])) {
         showToast(`◈ ASSIGNED: Task ${a.task_id} → ${a.agent}`, 'success');
@@ -228,10 +219,6 @@ function createCard(session) {
     outputModes[session.name] = 'off';
   }
 
-  // Apply settings to new card
-  const settings = loadSettings();
-  const commsEl = card.querySelector('.card-comms');
-  if (commsEl && settings.comms === false) commsEl.style.display = 'none';
 }
 
 function updateCard(session) {
@@ -361,13 +348,6 @@ function buildCardHTML(session) {
         <code class="ssh-code">${escHtml(session.terminalUrl || '')}</code>
         <button class="btn-icon copy-ssh" title="Copy to clipboard">⎘</button>
       </div>
-    </div>
-    <div class="card-comms" data-session="${escHtml(session.name)}">
-      <div class="comms-header">
-        <span class="section-label" style="font-size:9px">// COMMS</span>
-        <span class="comms-badge">0</span>
-      </div>
-      <div class="comms-messages"></div>
     </div>
     <div class="card-output-header">
       <span class="section-label" style="font-size:9px">// OUTPUT</span>
@@ -1083,7 +1063,7 @@ function saveSettings(settings) {
 
 function initSettings() {
   const settings = loadSettings();
-  const defaults = { wsl: true, remote: true, research: true, comms: true, advanced: true };
+  const defaults = { wsl: true, remote: true, research: true, advanced: true };
   const merged = { ...defaults, ...settings };
 
   // Set initial checkbox states
@@ -1172,9 +1152,6 @@ function applySettings(settings) {
     if (advForm) advForm.classList.add('hidden');
   }
 
-  // Team comms visibility (cards re-render handles this via class)
-  document.documentElement.dataset.showComms = settings.comms ? '1' : '0';
-
   // WSL/Remote are applied when presets render (they check config + settings)
   document.documentElement.dataset.showWsl = settings.wsl ? '1' : '0';
   document.documentElement.dataset.showRemote = settings.remote ? '1' : '0';
@@ -1196,84 +1173,6 @@ function applySettings(settings) {
     }
   });
 
-  // Hide comms sections on cards
-  document.querySelectorAll('.card-comms').forEach(el => {
-    el.style.display = settings.comms ? '' : 'none';
-  });
-}
-
-// ============================================
-// TEAM COMMS
-// ============================================
-
-function renderCommsInCards() {
-  if (!teamComms) return;
-
-  for (const team of teamComms.teams) {
-    for (const member of team.members) {
-      // Find card whose session name contains this member name
-      const commsEl = document.querySelector(`.card-comms[data-session*="${member.name}"]`);
-      if (!commsEl) continue;
-
-      const badge = commsEl.querySelector('.comms-badge');
-      const msgContainer = commsEl.querySelector('.comms-messages');
-
-      badge.textContent = member.unreadCount > 0 ? member.unreadCount : member.totalMessages;
-      badge.classList.toggle('has-unread', member.unreadCount > 0);
-
-      if (member.recentMessages.length === 0) {
-        msgContainer.innerHTML = '<div class="comms-empty">// NO_MESSAGES</div>';
-        continue;
-      }
-
-      msgContainer.innerHTML = member.recentMessages.slice(-5).map(m => {
-        const direction = m.from === 'team-lead' ? 'incoming' : 'outgoing';
-        const arrow = m.from === 'team-lead' ? '→' : '←';
-        const text = escHtml(m.text).slice(0, 120);
-        const time = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-        return `<div class="comms-msg ${direction}">
-          <span class="comms-meta">${escHtml(m.from)} ${arrow} ${escHtml(m.to)} <span class="comms-time">${time}</span></span>
-          <span class="comms-text">${text}</span>
-        </div>`;
-      }).join('');
-    }
-  }
-}
-
-function renderTeamFeed() {
-  if (!teamComms || !teamComms.feed.length) return;
-
-  let feedEl = document.getElementById('team-feed');
-  if (!feedEl) {
-    // Create the team feed section
-    const sessionsTab = document.getElementById('tab-sessions');
-    const agentGrid = sessionsTab.querySelector('.agent-grid');
-
-    const section = document.createElement('section');
-    section.id = 'team-feed-section';
-    section.innerHTML = `
-      <div class="panel-header">
-        <span class="section-label">03 / TEAM_COMMS</span>
-        <button class="btn-ghost" onclick="document.getElementById('team-feed').classList.toggle('collapsed')">▾</button>
-      </div>
-      <div id="team-feed" class="team-feed"></div>
-    `;
-    agentGrid.parentElement.insertBefore(section, agentGrid.parentElement.querySelector('#empty-state'));
-    feedEl = document.getElementById('team-feed');
-  }
-
-  feedEl.innerHTML = teamComms.feed.slice(-20).map(m => {
-    const arrow = m.from === 'team-lead' ? '→' : '←';
-    const text = escHtml(m.text).slice(0, 150);
-    const time = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-    const unreadClass = m.read ? '' : 'unread';
-    return `<div class="feed-msg ${unreadClass}">
-      <span class="feed-time">${time}</span>
-      <span class="feed-route">${escHtml(m.from)} ${arrow} ${escHtml(m.to)}</span>
-      <span class="feed-text">${text}</span>
-    </div>`;
-  }).join('');
-  feedEl.scrollTop = feedEl.scrollHeight;
 }
 
 document.addEventListener('DOMContentLoaded', () => {

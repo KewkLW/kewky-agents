@@ -186,8 +186,6 @@ Settings persist in your browser's localStorage.
 |----------|--------|-------------|
 | `/api/config` | GET | Dashboard configuration and platform info |
 | `/api/agents` | GET | Active agents with status, type, platform |
-| `/api/send` | POST | Send message to agent: `{ from, to, message }` |
-| `/api/messages` | GET | Inter-agent message audit log (last 500) |
 | `/api/team/status` | GET | All session statuses |
 | `/api/team/launch` | POST | Launch agent: `{ agent, role, platform, host }` |
 | `/api/team/send` | POST | Send to session: `{ session, message }` |
