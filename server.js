@@ -6,7 +6,7 @@ const path = require('path');
 
 const { PORT, POLL_INTERVAL, TAILSCALE_HOST, USER_HOME, AGENTS, PRESETS,
         WSL_DISTRO, REMOTE_HOSTS, WSL_PRESETS, REMOTE_PRESETS } = require('./src/config');
-const { detectWSL } = require('./src/platform');
+const { detectWSL, detectLocalPlatform } = require('./src/platform');
 const sessions = require('./src/sessions');
 const { parseSessionInfo } = require('./src/detect');
 const { detectWorktree } = require('./src/worktree');
@@ -16,6 +16,7 @@ const { runDistributor } = require('./src/auto-distribute');
 const { checkAndNudge } = require('./src/auto-nudge');
 
 // Detect platform capabilities at startup
+const localPlatform = detectLocalPlatform();
 const wslInfo = detectWSL();
 const remoteHostNames = Object.keys(REMOTE_HOSTS);
 
@@ -47,6 +48,7 @@ app.get('/api/config', (req, res) => {
     agents: Object.keys(AGENTS),
     agentDetails,
     tailscaleHost: TAILSCALE_HOST,
+    localPlatform,
     wslAvailable: wslInfo.available,
     wslDistros: wslInfo.distros,
     wslPresets: wslInfo.available ? WSL_PRESETS : [],
@@ -655,11 +657,13 @@ setInterval(pollAndBroadcast, POLL_INTERVAL);
 
 server.listen(PORT, () => {
   console.log(`// AGENT_DASHBOARD_ONLINE // PORT ${PORT}`);
+  console.log(`// PLATFORM: ${localPlatform.os} (${localPlatform.arch}) // ${localPlatform.hostname}`);
+  console.log(`// SHELL: ${localPlatform.shell}`);
   console.log(`// POLL_INTERVAL: ${POLL_INTERVAL}ms`);
   console.log(`// TAILSCALE_HOST: ${TAILSCALE_HOST}`);
   console.log(`// RESEARCH_DIR: ${research.RESEARCH_DIR}`);
   console.log(`// WSL: ${wslInfo.available ? `available (${wslInfo.distros.join(', ')})` : 'not available'}`);
-  console.log(`// REMOTE_HOSTS: ${remoteHostNames.length > 0 ? remoteHostNames.join(', ') : 'none configured'}`);
+  console.log(`// REMOTE_HOSTS: ${remoteHostNames.length > 0 ? remoteHostNames.map(n => `${n} (${REMOTE_HOSTS[n].os})`).join(', ') : 'none configured'}`);
   console.log(`// OPEN: http://localhost:${PORT}`);
   pollAndBroadcast();
 });

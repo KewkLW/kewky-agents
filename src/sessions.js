@@ -6,7 +6,7 @@
 
 const pty = require('node-pty');
 const os = require('os');
-const { wslPathTranslate } = require('./platform');
+const { wslPathTranslate, wrapRemoteCommand } = require('./platform');
 const { WSL_DISTRO } = require('./config');
 
 const sessions = new Map();
@@ -35,9 +35,9 @@ function getShellArgs(command, platform, sshTarget) {
     return ['-d', distro, '--', 'bash', '-l', '-c', command];
   }
   if (platform === 'ssh' && sshTarget) {
-    const { user, host, port } = sshTarget;
-    // Wrap command for remote PATH resolution (handles brew, nvm, etc.)
-    const remoteCmd = `bash -l -c '${command.replace(/'/g, "'\\''")}'`;
+    const { user, host, port, os: targetOS } = sshTarget;
+    // Wrap command based on target OS (windows=cmd, macos=bash+brew, linux=bash)
+    const remoteCmd = wrapRemoteCommand(command, targetOS || 'linux');
     return ['-p', String(port), '-t', '-o', 'StrictHostKeyChecking=accept-new', `${user}@${host}`, remoteCmd];
   }
   if (process.platform === 'win32') return ['/c', command];

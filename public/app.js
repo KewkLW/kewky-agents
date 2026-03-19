@@ -1116,6 +1116,17 @@ function initSettings() {
       if (!container) return;
 
       let html = '';
+
+      // Local platform
+      if (config.localPlatform) {
+        const lp = config.localPlatform;
+        html += `<div class="platform-status-card">
+          <span class="platform-status-dot available"></span>
+          <span class="platform-status-name">LOCAL</span>
+          <span class="platform-status-detail">${escHtml(lp.os)} (${escHtml(lp.arch)}) // ${escHtml(lp.hostname)}</span>
+        </div>`;
+      }
+
       // WSL status
       html += `<div class="platform-status-card">
         <span class="platform-status-dot ${config.wslAvailable ? 'available' : 'unavailable'}"></span>
@@ -1126,10 +1137,11 @@ function initSettings() {
       // Remote hosts
       if (config.remoteHostsConfigured) {
         for (const [name, info] of Object.entries(config.remoteHosts)) {
+          const osLabel = (info.os || 'linux').toUpperCase();
           html += `<div class="platform-status-card">
             <span class="platform-status-dot available"></span>
             <span class="platform-status-name">SSH: ${escHtml(name.toUpperCase())}</span>
-            <span class="platform-status-detail">${escHtml(info.user)}@${escHtml(info.host)}:${info.port}</span>
+            <span class="platform-status-detail">${escHtml(info.user)}@${escHtml(info.host)}:${info.port} [${osLabel}]</span>
           </div>`;
         }
       } else {
