@@ -50,7 +50,7 @@ setTimeout(() => {
   }
 }, 2000);
 
-const WS_URL = `ws://${location.host}`;
+const WS_URL = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;
 const RECONNECT_BASE = 1000;
 const RECONNECT_MAX = 30000;
 

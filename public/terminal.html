@@ -116,7 +116,7 @@
     fitAddon.fit();
 
     // WebSocket to PTY bridge
-    const wsUrl = `ws://${location.host}/pty?session=${encodeURIComponent(session)}&cols=${term.cols}&rows=${term.rows}`;
+    const wsUrl = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/pty?session=${encodeURIComponent(session)}&cols=${term.cols}&rows=${term.rows}`;
     let ws = null;
     let reconnectTimer = null;
     const dot = document.getElementById('status-dot');

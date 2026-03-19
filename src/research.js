@@ -3,7 +3,7 @@ const path = require('path');
 const tmux = require('./tmux');
 const { AGENTS } = require('./config');
 
-const RESEARCH_DIR = process.env.RESEARCH_DIR || 'F:/research';
+const RESEARCH_DIR = process.env.RESEARCH_DIR || path.join(__dirname, '..', 'research-output');
 const missions = new Map();
 
 function slugify(text) {
