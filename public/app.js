@@ -275,9 +275,9 @@ function updateCard(session) {
     wtRow.classList.add('hidden');
   }
 
-  // Update SSH command
+  // Update terminal URL
   const sshCode = card.querySelector('.ssh-code');
-  if (sshCode) sshCode.textContent = session.sshCommand;
+  if (sshCode) sshCode.textContent = session.terminalUrl || '';
 
   // Update tail output if in tail mode
   if (outputModes[session.name] === 'tail' && session.lastOutput) {
@@ -340,8 +340,8 @@ function buildCardHTML(session) {
         <span class="card-info-value worktree" data-info="worktree">${escHtml(wtText)}</span>
       </div>
       <div class="card-ssh">
-        <span class="card-info-label" style="min-width:auto">SSH</span>
-        <code class="ssh-code">${escHtml(session.sshCommand)}</code>
+        <span class="card-info-label" style="min-width:auto">URL</span>
+        <code class="ssh-code">${escHtml(session.terminalUrl || '')}</code>
         <button class="btn-icon copy-ssh" title="Copy to clipboard">⎘</button>
       </div>
     </div>
@@ -376,7 +376,7 @@ function bindCardEvents(card, sessionName) {
   card.querySelector('.copy-ssh').addEventListener('click', () => {
     const cmd = card.querySelector('.ssh-code').textContent;
     navigator.clipboard.writeText(cmd).then(() => {
-      showToast('SSH_COMMAND_COPIED', 'success');
+      showToast('URL_COPIED', 'success');
     });
   });
 
@@ -470,7 +470,7 @@ function setOutputMode(card, sessionName, mode) {
     term.open(container);
     xtermInstances[sessionName] = term;
 
-    // Make terminal interactive — send keystrokes to tmux session
+    // Make terminal interactive — send keystrokes to session
     term.onData(data => {
       wsSend({ type: 'raw_input', session: sessionName, data });
     });
@@ -1058,16 +1058,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!sessionName) return;
     debugLog.info(`ATTACH_DELEGATED: ${sessionName}`, { width: window.innerWidth });
 
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
-
-    if (isMobile) {
-      // Mobile: open in-browser terminal
-      window.open(`/terminal.html?session=${encodeURIComponent(sessionName)}`, '_blank');
-      showToast(`TERMINAL: ${sessionName}`, 'success');
-    } else {
-      // PC: spawn ONE Windows Terminal tab only, no page navigation
-      wsSend({ type: 'attach', session: sessionName });
-      showToast(`ATTACHING: ${sessionName}`, 'success');
-    }
+    // Open in-browser terminal (works on all platforms)
+    window.open(`/terminal.html?session=${encodeURIComponent(sessionName)}`, '_blank');
+    showToast(`TERMINAL: ${sessionName}`, 'success');
   });
 });

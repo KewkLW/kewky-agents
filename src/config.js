@@ -4,7 +4,6 @@ const path = require('path');
 const PORT = process.env.AGENT_DASH_PORT || 3847;
 const POLL_INTERVAL = 3000;
 const TAILSCALE_HOST = process.env.TAILSCALE_HOST || 'localhost';
-const WSL_DISTRO = process.env.WSL_DISTRO || 'Ubuntu-24.04';
 const ACTIVE_TEAM = process.env.ACTIVE_TEAM || '';
 const TEAMS_MCP_PATH = process.env.TEAMS_MCP_PATH || '';
 const USER_HOME = process.env.USERPROFILE || os.homedir();
@@ -13,14 +12,14 @@ const CODEX_HOME_ALT = process.env.CODEX_HOME_ALT || path.join(USER_HOME, '.code
 
 const AGENTS = {
   opus: {
-    model: 'claude-opus-4-6',
-    launchCmd: 'claude --dangerously-skip-permissions --model claude-opus-4-6',
+    model: 'claude-opus-4-6[1m]',
+    launchCmd: 'claude --dangerously-skip-permissions --model "claude-opus-4-6[1m]"',
     readyIndicator: /Try|context left/,
     type: 'claude'
   },
   'team-lead': {
-    model: 'claude-opus-4-6',
-    launchCmd: 'claude --dangerously-skip-permissions --model claude-opus-4-6',
+    model: 'claude-opus-4-6[1m]',
+    launchCmd: 'claude --dangerously-skip-permissions --model "claude-opus-4-6[1m]"',
     readyIndicator: /Try|context left/,
     type: 'claude',
     role: 'team-lead',
@@ -85,8 +84,19 @@ Respond with your coordination plan when given an objective.`
     launchCmd: 'gemini --yolo',
     readyIndicator: /Type your message|shortcuts/,
     type: 'gemini',
-    postLaunch: 'C-y'
+    postLaunch: '\x19' // Ctrl+Y byte
   }
+};
+
+// Lookup for tmux-style key names to raw bytes (for postLaunch compatibility)
+const SPECIAL_KEYS = {
+  'C-a': '\x01', 'C-b': '\x02', 'C-c': '\x03', 'C-d': '\x04',
+  'C-e': '\x05', 'C-f': '\x06', 'C-g': '\x07', 'C-h': '\x08',
+  'C-i': '\x09', 'C-j': '\x0a', 'C-k': '\x0b', 'C-l': '\x0c',
+  'C-m': '\x0d', 'C-n': '\x0e', 'C-o': '\x0f', 'C-p': '\x10',
+  'C-q': '\x11', 'C-r': '\x12', 'C-s': '\x13', 'C-t': '\x14',
+  'C-u': '\x15', 'C-v': '\x16', 'C-w': '\x17', 'C-x': '\x18',
+  'C-y': '\x19', 'C-z': '\x1a'
 };
 
 const PRESETS = [
@@ -103,7 +113,7 @@ const PRESETS = [
 ];
 
 module.exports = {
-  PORT, POLL_INTERVAL, TAILSCALE_HOST, WSL_DISTRO,
+  PORT, POLL_INTERVAL, TAILSCALE_HOST,
   ACTIVE_TEAM, TEAMS_MCP_PATH, USER_HOME,
-  AGENTS, PRESETS
+  AGENTS, PRESETS, SPECIAL_KEYS
 };

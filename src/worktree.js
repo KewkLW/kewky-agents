@@ -1,11 +1,22 @@
-const { wslExec } = require('./tmux');
+const { exec } = require('child_process');
+
+function nativeExec(cmd, timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    exec(cmd, { timeout: timeoutMs, encoding: 'utf8', windowsHide: true }, (err, stdout) => {
+      if (err) {
+        resolve(null);
+      } else {
+        resolve(stdout);
+      }
+    });
+  });
+}
 
 async function detectWorktree(workdir) {
   if (!workdir) return null;
 
-  const raw = await wslExec(
-    `cd '${workdir}' 2>/dev/null && git worktree list --porcelain 2>/dev/null`,
-    5000
+  const raw = await nativeExec(
+    `git -C "${workdir}" worktree list --porcelain`
   );
   if (!raw) return null;
 
@@ -24,8 +35,8 @@ async function detectWorktree(workdir) {
       }
     }
 
-    const normalizedWorkdir = workdir.replace(/\/+$/, '');
-    const normalizedWt = wtPath.replace(/\/+$/, '');
+    const normalizedWorkdir = workdir.replace(/[\\/]+$/, '').replace(/\\/g, '/');
+    const normalizedWt = wtPath.replace(/[\\/]+$/, '').replace(/\\/g, '/');
 
     if (normalizedWorkdir === normalizedWt || normalizedWorkdir.startsWith(normalizedWt + '/')) {
       if (wtPath.includes('.worktrees') || wtPath.includes('worktree')) {

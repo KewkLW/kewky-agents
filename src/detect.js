@@ -86,9 +86,8 @@ function detectStatus(paneLines) {
   return 'idle';
 }
 
-function formatUptime(createdTimestamp) {
-  const now = Math.floor(Date.now() / 1000);
-  const diff = now - createdTimestamp;
+function formatUptime(createdTimestampMs) {
+  const diff = Math.floor((Date.now() - createdTimestampMs) / 1000);
   if (diff < 0) return '0s';
 
   const hours = Math.floor(diff / 3600);
@@ -100,21 +99,21 @@ function formatUptime(createdTimestamp) {
   return `${secs}s`;
 }
 
-function buildSshCommand(tailscaleHost, sessionName) {
-  return `ssh ${tailscaleHost} -t "tmux attach -t ${sessionName}"`; // native Windows tmux is on PATH
+function buildSshCommand(tailscaleHost, sessionName, port) {
+  return `http://${tailscaleHost}:${port || 3847}/terminal.html?session=${encodeURIComponent(sessionName)}`;
 }
 
-function parseSessionInfo(rawSession, paneLines, tailscaleHost) {
+function parseSessionInfo(rawSession, paneLines, tailscaleHost, port) {
   return {
     name: rawSession.name,
     agentType: detectAgentType(rawSession.name, paneLines),
     role: detectRole(rawSession.name),
     status: detectStatus(paneLines),
     uptime: formatUptime(rawSession.created),
-    uptimeSeconds: Math.floor(Date.now() / 1000) - rawSession.created,
+    uptimeSeconds: Math.floor((Date.now() - rawSession.created) / 1000),
     workdir: rawSession.workdir,
     attached: rawSession.attached,
-    sshCommand: buildSshCommand(tailscaleHost, rawSession.name),
+    terminalUrl: buildSshCommand(tailscaleHost, rawSession.name, port),
     lastOutput: paneLines ? paneLines.slice(-30) : []
   };
 }

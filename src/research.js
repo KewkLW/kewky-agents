@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const tmux = require('./tmux');
+const sessions = require('./sessions');
 const { AGENTS } = require('./config');
 
 const RESEARCH_DIR = process.env.RESEARCH_DIR || path.join(__dirname, '..', 'research-output');
@@ -90,7 +90,7 @@ function buildAgentPrompt(mission, agentName) {
   const agentState = mission.agents[agentName];
   const winOutputPath = agentState.outputFile.replace(/\//g, '/');
 
-  // Keep prompt short for tmux reliability — agent reads the brief from file
+  // Keep prompt short — agent reads the brief from file
   let prompt = `You are a researcher. Read the research brief at ${mission.outputDir.replace(/\\/g, '/')}/BRIEF.md then research the topic thoroughly. `;
   prompt += `Write your complete findings as markdown to: ${winOutputPath.replace(/\\/g, '/')} `;
   prompt += `Include an executive summary, key findings, options with tradeoffs, your recommendation, and references. `;
@@ -115,20 +115,23 @@ async function deployAgents(mission) {
     agentState.status = 'launching';
     agentState.startedAt = Date.now();
 
-    // Create tmux session and launch agent
+    // Create pty session and launch agent
     const workdir = mission.outputDir;
-    const ok = await tmux.createSession(agentState.session, workdir, agentConfig.launchCmd);
+    const ok = sessions.create(agentState.session, agentConfig.launchCmd, {
+      cwd: workdir,
+      env: agentConfig.env
+    });
 
     if (!ok) {
       agentState.status = 'error';
-      agentState.error = 'Failed to create tmux session';
+      agentState.error = 'Failed to create session';
       continue;
     }
 
     // Handle Gemini's Ctrl+Y confirmation
     if (agentConfig.postLaunch) {
       await new Promise(r => setTimeout(r, 3000));
-      await tmux.sendSpecialKey(agentState.session, agentConfig.postLaunch);
+      sessions.write(agentState.session, agentConfig.postLaunch);
     }
 
     agentState.status = 'waiting_ready';
@@ -159,7 +162,7 @@ async function waitAndSendPrompt(mission, agentName) {
       return;
     }
 
-    const lines = await tmux.capturePane(agentState.session, 30);
+    const lines = sessions.getOutput(agentState.session, 30);
     const lastLines = lines.slice(-10).join('\n');
 
     const isReady = agentConfig.readyIndicator.test(lastLines);
@@ -169,7 +172,7 @@ async function waitAndSendPrompt(mission, agentName) {
       agentState.status = 'researching';
       console.log(`// RESEARCH_READY: ${agentName} ready after ${elapsed}s — sending prompt`);
       const prompt = buildAgentPrompt(mission, agentName);
-      await tmux.sendKeys(agentState.session, prompt);
+      sessions.write(agentState.session, prompt + '\r');
     } else {
       if (elapsed % 15 < 5) { // Log every ~15s
         console.log(`// RESEARCH_WAIT: ${agentName} not ready (${elapsed}s elapsed)`);
@@ -218,7 +221,7 @@ function checkMissionComplete(mission) {
     // Kill research sessions (cleanup)
     for (const agentState of Object.values(mission.agents)) {
       if (agentState.session) {
-        tmux.killSession(agentState.session).catch(() => {});
+        sessions.kill(agentState.session);
       }
     }
   }
@@ -386,7 +389,7 @@ async function killMission(missionId) {
   for (const agentState of Object.values(mission.agents)) {
     if (agentState.status !== 'complete' && agentState.status !== 'error') {
       agentState.status = 'killed';
-      await tmux.killSession(agentState.session);
+      sessions.kill(agentState.session);
     }
   }
 

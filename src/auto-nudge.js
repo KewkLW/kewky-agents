@@ -1,9 +1,9 @@
 /**
  * Auto-nudge — detects idle agents with assigned tasks and
- * sends them a reminder to keep working via tmux send-keys.
+ * sends them a reminder to keep working.
  */
 
-const tmux = require('./tmux');
+const sessions = require('./sessions');
 const { ACTIVE_TEAM } = require('./config');
 
 // Track how long each session has been idle
@@ -55,7 +55,7 @@ function checkAndNudge(sessions) {
 async function nudgeAgent(sessionName) {
   const teamRef = ACTIVE_TEAM ? ` call read_inbox with team_name="${ACTIVE_TEAM}" and your agent name.` : '';
   const prompt = `Continue working on your assigned tasks. If you finished your current task, check your inbox for new assignments:${teamRef}`;
-  await tmux.sendKeys(sessionName, prompt);
+  sessions.write(sessionName, prompt + '\r');
 }
 
 module.exports = { checkAndNudge };

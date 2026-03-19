@@ -4,8 +4,8 @@ const http = require('http');
 const { WebSocketServer } = require('ws');
 const path = require('path');
 
-const { PORT, POLL_INTERVAL, TAILSCALE_HOST, WSL_DISTRO, USER_HOME, AGENTS, PRESETS } = require('./src/config');
-const tmux = require('./src/tmux');
+const { PORT, POLL_INTERVAL, TAILSCALE_HOST, USER_HOME, AGENTS, PRESETS } = require('./src/config');
+const sessions = require('./src/sessions');
 const { parseSessionInfo } = require('./src/detect');
 const { detectWorktree } = require('./src/worktree');
 const research = require('./src/research');
@@ -49,7 +49,7 @@ app.post('/api/team/send', async (req, res) => {
   if (!session || !message) {
     return res.status(400).json({ error: 'session and message required' });
   }
-  const ok = await tmux.sendKeys(session, message);
+  const ok = sessions.write(session, message + '\r');
   if (ok) {
     console.log(`// TEAM_LEAD_SEND: ${session} <- ${message.slice(0, 60)}...`);
     res.json({ ok: true });
@@ -60,7 +60,7 @@ app.post('/api/team/send', async (req, res) => {
 
 // Team lead API — get output from a specific session
 app.get('/api/team/output/:session', async (req, res) => {
-  const lines = await tmux.capturePane(req.params.session, parseInt(req.query.lines) || 50);
+  const lines = sessions.getOutput(req.params.session, parseInt(req.query.lines) || 50);
   res.json({ session: req.params.session, lines });
 });
 
@@ -75,26 +75,20 @@ app.post('/api/team/launch', async (req, res) => {
   const dir = workdir || USER_HOME;
   let launchCmd = agentConfig.launchCmd;
   if (flags) launchCmd += ' ' + flags;
-  if (agentConfig.env) {
-    const envPrefix = Object.entries(agentConfig.env)
-      .map(([k, v]) => `set ${k}=${v}&&`)
-      .join(' ');
-    launchCmd = envPrefix + ' ' + launchCmd;
-  }
-  const ok = await tmux.createSession(name, dir, launchCmd);
+  const ok = sessions.create(name, launchCmd, { cwd: dir, env: agentConfig.env });
   if (ok) {
     console.log(`// TEAM_LEAD_LAUNCH: ${name} [${agent}/${role}]`);
     if (agentConfig.postLaunch) {
-      setTimeout(() => tmux.sendSpecialKey(name, agentConfig.postLaunch), 3000);
+      setTimeout(() => sessions.write(name, agentConfig.postLaunch), 3000);
     }
     // If team lead wants to send an initial message after launch
     if (initMessage) {
       const waitAndSend = async () => {
         for (let i = 0; i < 15; i++) {
           await new Promise(r => setTimeout(r, 2000));
-          const paneLines = await tmux.capturePane(name, 10);
+          const paneLines = sessions.getOutput(name, 10);
           if (agentConfig.readyIndicator && agentConfig.readyIndicator.test(paneLines.join('\n'))) {
-            await tmux.sendKeys(name, initMessage);
+            sessions.write(name, initMessage + '\r');
             console.log(`// TEAM_LEAD_INIT_MSG: ${name}`);
             return;
           }
@@ -112,7 +106,7 @@ app.post('/api/team/launch', async (req, res) => {
 // Team lead API — kill an agent
 app.post('/api/team/kill', async (req, res) => {
   const { session } = req.body;
-  const ok = await tmux.killSession(session);
+  const ok = sessions.kill(session);
   if (ok) {
     console.log(`// TEAM_LEAD_KILL: ${session}`);
     setTimeout(pollAndBroadcast, 500);
@@ -198,8 +192,7 @@ server.on('upgrade', (req, socket, head) => {
   }
 });
 
-// PTY bridge — spawns wsl tmux attach and bridges I/O over WebSocket
-const pty = require('node-pty');
+// PTY bridge — subscribes to existing session's pty output over WebSocket
 ptyWss.on('connection', (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const session = url.searchParams.get('session');
@@ -211,46 +204,45 @@ ptyWss.on('connection', (ws, req) => {
     return;
   }
 
+  if (!sessions.has(session)) {
+    ws.close(1008, 'Session not found');
+    return;
+  }
+
   console.log(`// PTY_CONNECT: ${session} (${cols}x${rows})`);
 
-  // Spawn wsl tmux attach
-  const shell = pty.spawn('wsl.exe', ['-d', WSL_DISTRO, '--', 'tmux', 'attach-session', '-t', session], {
-    name: 'xterm-256color',
-    cols,
-    rows,
-    env: process.env
-  });
+  // Resize session to match client
+  sessions.resize(session, cols, rows);
 
-  // PTY stdout → WebSocket
-  shell.onData(data => {
-    if (ws.readyState === 1) { // WebSocket.OPEN
+  // Send raw buffer replay so the client sees existing output
+  const replay = sessions.getRawOutput(session);
+  if (replay) {
+    ws.send(replay);
+  }
+
+  // Subscribe to live output
+  const unsubscribe = sessions.onData(session, (data) => {
+    if (ws.readyState === 1) {
       ws.send(data);
     }
-  });
-
-  shell.onExit(({ exitCode }) => {
-    console.log(`// PTY_EXIT: ${session} (code ${exitCode})`);
-    if (ws.readyState === 1) ws.close();
   });
 
   // WebSocket → PTY stdin
   ws.on('message', (msg) => {
     const str = msg.toString();
-    // Check for resize command
     try {
       const parsed = JSON.parse(str);
       if (parsed.type === 'resize') {
-        shell.resize(parsed.cols, parsed.rows);
+        sessions.resize(session, parsed.cols, parsed.rows);
         return;
       }
     } catch {}
-    // Regular input
-    shell.write(str);
+    sessions.write(session, str);
   });
 
   ws.on('close', () => {
     console.log(`// PTY_DISCONNECT: ${session}`);
-    shell.kill();
+    unsubscribe();
   });
 });
 
@@ -305,21 +297,15 @@ async function handleLaunch(ws, msg) {
   const name = sessionName || `${role || 'agent'}-${agent}-${Date.now().toString(36).slice(-4)}`;
   const dir = workdir || USER_HOME;
 
-  // Build launch command with env vars if needed
+  // Build launch command
   let launchCmd = agentConfig.launchCmd;
   if (flags) launchCmd += ' ' + flags;
-  if (agentConfig.env) {
-    const envPrefix = Object.entries(agentConfig.env)
-      .map(([k, v]) => `set ${k}=${v}&&`)
-      .join(' ');
-    launchCmd = envPrefix + ' ' + launchCmd;
-  }
 
-  const ok = await tmux.createSession(name, dir, launchCmd);
+  const ok = sessions.create(name, launchCmd, { cwd: dir, env: agentConfig.env });
 
   if (ok && agentConfig.postLaunch) {
-    setTimeout(async () => {
-      await tmux.sendSpecialKey(name, agentConfig.postLaunch);
+    setTimeout(() => {
+      sessions.write(name, agentConfig.postLaunch);
     }, 3000);
   }
 
@@ -328,15 +314,14 @@ async function handleLaunch(ws, msg) {
     const waitForReady = async (retries = 20) => {
       for (let i = 0; i < retries; i++) {
         await new Promise(r => setTimeout(r, 2000));
-        const paneLines = await tmux.capturePane(name, 10);
+        const paneLines = sessions.getOutput(name, 10);
         const paneText = paneLines.join('\n');
         if (agentConfig.readyIndicator && agentConfig.readyIndicator.test(paneText)) {
           console.log(`// TEAM_LEAD_READY: ${name} (after ${(i+1)*2}s)`);
-          // Feed the init prompt + current team status
           const statusSummary = previousState.length > 0
             ? '\n\nCurrent active sessions:\n' + previousState.map(s => `- ${s.name}: ${s.status}`).join('\n')
             : '\n\nNo other agents currently active.';
-          await tmux.sendKeys(name, agentConfig.initPrompt + statusSummary);
+          sessions.write(name, agentConfig.initPrompt + statusSummary + '\r');
           return;
         }
       }
@@ -357,7 +342,7 @@ async function handleLaunch(ws, msg) {
 
 async function handleKill(ws, msg) {
   const { session } = msg;
-  const ok = await tmux.killSession(session);
+  const ok = sessions.kill(session);
   const event = ok ? 'session_killed' : 'error';
   const data = ok ? { session } : { message: `Failed to kill session ${session}` };
   broadcast({ type: 'event', event, data });
@@ -368,10 +353,10 @@ async function handleKill(ws, msg) {
   }
 }
 
-async function handleSend(ws, msg) {
+function handleSend(ws, msg) {
   const { session, text } = msg;
   if (!text || !session) return;
-  const ok = await tmux.sendKeys(session, text);
+  const ok = sessions.write(session, text + '\r');
   if (!ok) {
     ws.send(JSON.stringify({ type: 'event', event: 'error', data: { message: `Failed to send to ${session}` } }));
   }
@@ -380,40 +365,15 @@ async function handleSend(ws, msg) {
 function handleRawInput(ws, msg) {
   const { session, data } = msg;
   if (!session || !data) return;
-  // Send raw characters/escape sequences directly to tmux pane
-  const escaped = data.replace(/'/g, "'\\''").replace(/\\/g, '\\\\');
-  const { exec } = require('child_process');
-  // Use send-keys -l for literal text, but handle special keys separately
-  if (data === '\r' || data === '\n') {
-    exec(`wsl -d ${WSL_DISTRO} bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' Enter"`, { windowsHide: true });
-  } else if (data === '\x7f' || data === '\b') {
-    exec(`wsl -d ${WSL_DISTRO} bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' BSpace"`, { windowsHide: true });
-  } else if (data === '\x03') {
-    exec(`wsl -d ${WSL_DISTRO} bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' C-c"`, { windowsHide: true });
-  } else if (data === '\x1b') {
-    exec(`wsl -d ${WSL_DISTRO} bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' Escape"`, { windowsHide: true });
-  } else if (data.startsWith('\x1b[')) {
-    // Arrow keys and other escape sequences
-    const keyMap = { '\x1b[A': 'Up', '\x1b[B': 'Down', '\x1b[C': 'Right', '\x1b[D': 'Left' };
-    const key = keyMap[data];
-    if (key) {
-      exec(`wsl -d ${WSL_DISTRO} bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' ${key}"`, { windowsHide: true });
-    }
-  } else {
-    // Regular text — send literally
-    exec(`wsl -d ${WSL_DISTRO} bash -c "tmux send-keys -t '${session.replace(/'/g, "'\\''")}' -l '${escaped}'"`, { windowsHide: true });
-  }
+  sessions.write(session, data);
 }
 
 function handleAttach(ws, msg) {
   const { session } = msg;
   if (!session) return;
-  const escaped = session.replace(/'/g, "''");
-  // Open Windows Terminal tab with WSL tmux attach
-  const cmd = `wt -w 0 new-tab --title "${escaped}" -- wsl -d ${WSL_DISTRO} tmux attach-session -t '${escaped}'`;
-  require('child_process').exec(cmd, { windowsHide: false, shell: 'cmd.exe' });
+  // Client opens browser terminal — just acknowledge
   ws.send(JSON.stringify({ type: 'event', event: 'session_attached', data: { session } }));
-  console.log(`// ATTACH_WT: ${session}`);
+  console.log(`// ATTACH: ${session}`);
 }
 
 function handleSubscribe(ws, msg) {
@@ -487,7 +447,7 @@ async function handleTeamBrief(ws, msg) {
     const agentConfig = AGENTS['team-lead'];
     leadSession = `team-lead-${Date.now().toString(36).slice(-4)}`;
     const dir = workdir || USER_HOME;
-    const ok = await tmux.createSession(leadSession, dir, agentConfig.launchCmd);
+    const ok = sessions.create(leadSession, agentConfig.launchCmd, { cwd: dir, env: agentConfig.env });
     if (!ok) {
       ws.send(JSON.stringify({ type: 'event', event: 'error', data: { message: 'Failed to launch team lead' } }));
       return;
@@ -497,11 +457,11 @@ async function handleTeamBrief(ws, msg) {
     // Wait for ready
     for (let i = 0; i < 20; i++) {
       await new Promise(r => setTimeout(r, 2000));
-      const paneLines = await tmux.capturePane(leadSession, 10);
+      const paneLines = sessions.getOutput(leadSession, 10);
       if (agentConfig.readyIndicator.test(paneLines.join('\n'))) break;
     }
     // Send init prompt
-    await tmux.sendKeys(leadSession, agentConfig.initPrompt);
+    sessions.write(leadSession, agentConfig.initPrompt + '\r');
     await new Promise(r => setTimeout(r, 5000)); // Let it process
   }
 
@@ -526,7 +486,7 @@ Available API endpoints (curl from your terminal):
 
 Decompose this objective into tasks and coordinate the team. Go.`;
 
-  await tmux.sendKeys(leadSession, brief);
+  sessions.write(leadSession, brief + '\r');
   console.log(`// TEAM_BRIEF_SENT: ${leadSession} <- ${objective.slice(0, 60)}...`);
   broadcast({ type: 'event', event: 'team_briefed', data: { session: leadSession, objective } });
   setTimeout(pollAndBroadcast, 2000);
@@ -537,26 +497,26 @@ async function pollAndBroadcast() {
   polling = true;
 
   try {
-    const rawSessions = await tmux.listSessions();
-    const sessions = [];
+    const rawSessions = sessions.list();
+    const sessionInfos = [];
 
     for (const raw of rawSessions) {
-      const paneLines = await tmux.capturePane(raw.name, 30);
-      const info = parseSessionInfo(raw, paneLines, TAILSCALE_HOST);
+      const paneLines = sessions.getOutput(raw.name, 30);
+      const info = parseSessionInfo(raw, paneLines, TAILSCALE_HOST, PORT);
       const worktree = await detectWorktree(raw.workdir);
       if (worktree) info.worktree = worktree;
-      sessions.push(info);
+      sessionInfos.push(info);
     }
 
-    previousState = sessions;
-    broadcast({ type: 'state', sessions });
+    previousState = sessionInfos;
+    broadcast({ type: 'state', sessions: sessionInfos });
 
     // Poll research missions for completion
     research.pollMissions();
     broadcast({ type: 'research_state', missions: research.getMissions() });
 
     // Auto-nudge idle agents
-    checkAndNudge(sessions);
+    checkAndNudge(sessionInfos);
 
     // Auto-distribute ready tasks
     const distResult = runDistributor();
@@ -578,7 +538,7 @@ async function pollAndBroadcast() {
     for (const [ws, subs] of clientSubscriptions) {
       for (const [sessionName, mode] of subs) {
         if (mode === 'tail' || mode === 'full') {
-          const lines = await tmux.capturePane(sessionName, mode === 'full' ? 200 : 30);
+          const lines = sessions.getOutput(sessionName, mode === 'full' ? 200 : 30);
           if (lines.length > 0) {
             safeSend(ws, { type: 'output', session: sessionName, lines });
           }
