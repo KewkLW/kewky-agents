@@ -54,3 +54,25 @@ The CLI shows a prompt containing `Try` or `context left` when ready for input.
 ## Multiple Sessions
 
 Each `claude` process is independent. No config-dir separation needed — OAuth tokens are shared, and Anthropic handles rate limiting per subscription.
+
+## Remote Machine Setup
+
+To run Claude agents on a remote machine via the dashboard's SSH spawning:
+
+1. **Install Node.js and Claude CLI** on the remote machine
+2. **Authenticate once** by running `claude` interactively and completing OAuth
+3. **Enable SSH access** from the dashboard machine:
+   - **macOS**: System Settings > General > Sharing > Remote Login
+   - **Linux**: `sudo apt install openssh-server && sudo systemctl enable ssh`
+   - **Windows**: Settings > Optional Features > OpenSSH Server > Install, then `Start-Service sshd`
+4. **Set up SSH key auth** (so the dashboard doesn't hang on password prompts):
+   ```bash
+   # From the dashboard machine:
+   ssh-copy-id user@remote-host
+   ```
+5. **Configure in dashboard `.env`**:
+   ```bash
+   REMOTE_HOST_MYBOX=user@remote-host:22:macos   # or :linux or :windows
+   ```
+
+Claude credentials are stored per-user (`~/.claude/`), so each remote user account needs its own OAuth login.

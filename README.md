@@ -44,6 +44,8 @@ Open `http://localhost:3847` in your browser.
 |----------|---------|-------------|
 | `AGENT_DASH_PORT` | `3847` | Server port |
 | `TAILSCALE_HOST` | `localhost` | Hostname for remote terminal URLs (set to your Tailscale IP for mobile access) |
+| `WSL_DISTRO` | `Ubuntu-24.04` | WSL distribution for WSL agent spawning (Windows only) |
+| `REMOTE_HOST_*` | *(none)* | SSH remote hosts (see below) |
 | `ACTIVE_TEAM` | *(empty)* | Team name for claude-teams MCP integration |
 | `TEAMS_MCP_PATH` | *(empty)* | Path to claude-teams MCP server |
 | `CODEX_HOME` | `~/.codex` | Codex config directory (primary account) |
@@ -51,6 +53,69 @@ Open `http://localhost:3847` in your browser.
 | `RESEARCH_DIR` | `./research-output` | Directory for research mission output |
 
 You can also create a `.env` file in the project root.
+
+## Cross-Platform Agent Spawning
+
+The dashboard can spawn agents on the local machine, inside WSL (Windows only), or on remote machines over SSH.
+
+### Local (native)
+
+Agents spawn directly using the local shell. This is the default and requires no extra configuration — just install the CLI tools and authenticate.
+
+### WSL (Windows only)
+
+On Windows with WSL installed, agents can be spawned inside a WSL distribution. WSL presets appear automatically in the UI when WSL is detected. Set `WSL_DISTRO` to choose which distro (default: `Ubuntu-24.04`).
+
+The CLI tools must be installed and authenticated **inside the WSL distro**, not just on the Windows side.
+
+### SSH Remote Hosts
+
+Spawn agents on remote machines (another PC, Mac, server, Raspberry Pi) over SSH.
+
+**Format**: `REMOTE_HOST_<NAME>=user@host:port:os`
+
+| Field | Required | Default | Values |
+|-------|----------|---------|--------|
+| `user@host` | yes | — | SSH user and hostname/IP |
+| `port` | no | `22` | SSH port |
+| `os` | no | `linux` | `windows`, `macos`, or `linux` |
+
+The `os` field controls how commands are wrapped on the remote:
+- **`linux`** — `bash -l -c 'command'` (loads profile for nvm, pyenv, etc.)
+- **`macos`** — `bash -l -c` with Homebrew `shellenv` for PATH resolution
+- **`windows`** — command sent directly (Windows OpenSSH uses cmd.exe)
+
+**Example `.env`**:
+```bash
+REMOTE_HOST_PC=kewkd@192.168.1.10:22:windows
+REMOTE_HOST_MAC=user@macbook.local:22:macos
+REMOTE_HOST_PI=pi@raspberrypi.local:22:linux
+```
+
+**Remote machine requirements**:
+1. SSH server enabled with key-based auth (`ssh-copy-id user@host`)
+2. Node.js installed (for the CLI tools)
+3. At least one CLI tool installed and OAuth'd (see `docs/setup-*.md`)
+
+See individual agent setup guides for detailed remote instructions:
+- [docs/setup-claude.md](docs/setup-claude.md)
+- [docs/setup-codex.md](docs/setup-codex.md)
+- [docs/setup-gemini.md](docs/setup-gemini.md)
+- [docs/setup-multi-account.md](docs/setup-multi-account.md)
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/config` | GET | Dashboard configuration, presets, platform info |
+| `/api/agents` | GET | List active agents with status, type, platform, host |
+| `/api/send` | POST | Send message to agent stdin: `{ from, to, message }` |
+| `/api/messages` | GET | Audit log of inter-agent messages (last 500) |
+| `/api/team/status` | GET | All agent session statuses |
+| `/api/team/launch` | POST | Launch agent: `{ agent, role, platform, host }` |
+| `/api/team/send` | POST | Send to session: `{ session, message }` |
+| `/api/team/output/:session` | GET | Read agent output lines |
+| `/api/team/kill` | POST | Kill session: `{ session }` |
 
 ## Usage
 
@@ -90,6 +155,7 @@ Use the **TEAM BRIEF** feature to auto-launch a team lead agent that coordinates
 server.js              Express + WebSocket server
 src/sessions.js        node-pty session lifecycle (create/kill/write/resize)
 src/config.js          Agent definitions, presets, env config
+src/platform.js        Platform detection (local OS, WSL, SSH remote hosts)
 src/detect.js          Status detection from terminal output
 src/research.js        Multi-agent research missions
 src/auto-nudge.js      Auto-nudge idle agents
@@ -97,4 +163,5 @@ src/auto-distribute.js Task auto-distribution
 src/worktree.js        Git worktree detection
 src/comms.js           Team communication polling
 public/                Static frontend (app.js, terminal.html, styles)
+docs/                  Agent CLI setup guides
 ```
