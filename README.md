@@ -2,6 +2,8 @@
 
 Launch, monitor, and control AI coding agents from anywhere — your phone, a friend's laptop, or across your own machines. One dashboard, every platform.
 
+![Kewky Agents Dashboard](docs/screenshot.png)
+
 ## The Idea
 
 You have AI agents (Claude, Codex, Gemini). You want to run several at once, on different machines, and keep tabs on all of them without being chained to one terminal. Maybe you're on your phone at lunch and want to check if your Opus agent finished that refactor. Maybe you're at a friend's place and want to spin up a Haiku researcher on your home PC.
