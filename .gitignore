@@ -3,3 +3,5 @@ node_modules/
 logs/
 .env
 server-debug.log
+PLAN.md
+HANDOFF.md
