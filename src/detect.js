@@ -40,14 +40,46 @@ function detectRole(sessionName) {
 }
 
 function detectStatus(paneLines) {
-  if (!paneLines || paneLines.length === 0) return 'idle';
+  if (!paneLines || paneLines.length === 0) return 'offline';
 
-  const lastLines = paneLines.slice(-5).join('\n');
+  const last10 = paneLines.slice(-10).join('\n');
+  const last5 = paneLines.slice(-5).join('\n');
+  const lastLine = paneLines.filter(l => l.trim()).slice(-1)[0] || '';
 
-  if (/Try "edit"/.test(lastLines)) return 'ready';
-  if (/shortcuts/.test(lastLines) && /\/help/.test(lastLines)) return 'ready';
-  if (/[›>]\s*$/.test(lastLines.trim())) return 'ready';
+  // Codex patterns
+  if (/Working \(\d+s/.test(last5)) return 'working';
+  if (/Thinking/.test(last5)) return 'thinking';
+  if (/esc to interrupt/.test(last5)) return 'working';
 
+  // Claude patterns
+  if (/Crunching|crunching/.test(last5)) return 'working';
+  if (/◐|◑|◒|◓/.test(last5)) return 'working';  // Spinner
+  if (/Running |Ran |Reading |Editing /.test(last5)) return 'working';
+
+  // Gemini patterns
+  if (/Generating|Searching|Analyzing/.test(last5)) return 'working';
+  if (/✦/.test(last5) && !/\*\s+Type/.test(last5)) return 'working';
+
+  // Error patterns
+  if (/error|Error|ERROR|FATAL|panic/.test(lastLine)) return 'error';
+  if (/context left/.test(last5)) {
+    const match = last5.match(/(\d+)%\s*left/);
+    if (match && parseInt(match[1]) < 10) return 'low_context';
+  }
+
+  // Idle/ready patterns — agent is at prompt waiting for input
+  if (/[›❯>]\s*$/.test(lastLine.trim())) return 'idle';
+  if (/\*\s+Type your message/.test(last5)) return 'idle';  // Gemini prompt
+  if (/Press enter to confirm/.test(last5)) return 'waiting_approval';
+  if (/Yes, proceed|No, and tell/.test(last5)) return 'waiting_approval';
+
+  // MCP loading
+  if (/Starting MCP|MCP servers/.test(last5)) return 'loading';
+
+  // Trust prompt
+  if (/trust this folder|trust the contents/.test(last10)) return 'waiting_approval';
+
+  // Fallback
   const nonEmpty = paneLines.filter(l => l.trim().length > 0);
   if (nonEmpty.length > 2) return 'running';
 
@@ -69,7 +101,7 @@ function formatUptime(createdTimestamp) {
 }
 
 function buildSshCommand(tailscaleHost, sessionName) {
-  return `ssh ${tailscaleHost} -t "tmux attach -t ${sessionName}"`;
+  return `ssh ${tailscaleHost} -t "tmux attach -t ${sessionName}"`; // native Windows tmux is on PATH
 }
 
 function parseSessionInfo(rawSession, paneLines, tailscaleHost) {

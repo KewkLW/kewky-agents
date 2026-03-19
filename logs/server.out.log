@@ -1,0 +1,29 @@
+// AGENT_DASHBOARD_ONLINE // PORT 80 
+// POLL_INTERVAL: 3000ms
+// TAILSCALE_HOST: wsl-kewkd
+// RESEARCH_DIR: F:/research
+// OPEN: http://localhost:80 
+// CLIENT_CONNECTED
+// SESSION_CREATED: researcher-codex-j0q5 [codex/researcher]
+// AGENT_DASHBOARD_ONLINE // PORT 80 
+// POLL_INTERVAL: 3000ms
+// TAILSCALE_HOST: wsl-kewkd
+// RESEARCH_DIR: F:/research
+// OPEN: http://localhost:80 
+// CLIENT_CONNECTED
+// CLIENT_DISCONNECTED
+// AGENT_DASHBOARD_ONLINE // PORT 80 
+// POLL_INTERVAL: 3000ms
+// TAILSCALE_HOST: wsl-kewkd
+// RESEARCH_DIR: F:/research
+// OPEN: http://localhost:80 
+// AGENT_DASHBOARD_ONLINE // PORT 80 
+// POLL_INTERVAL: 3000ms
+// TAILSCALE_HOST: wsl-kewkd
+// RESEARCH_DIR: F:/research
+// OPEN: http://localhost:80 
+// AGENT_DASHBOARD_ONLINE // PORT 80 
+// POLL_INTERVAL: 3000ms
+// TAILSCALE_HOST: wsl-kewkd
+// RESEARCH_DIR: F:/research
+// OPEN: http://localhost:80 

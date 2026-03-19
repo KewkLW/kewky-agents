@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>TERMINAL</title>
+  <link rel="stylesheet" href="xterm.min.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #1A1A1A;
+      overflow: hidden;
+      height: 100dvh;
+      width: 100vw;
+      display: flex;
+      flex-direction: column;
+    }
+    #toolbar {
+      background: #1E2830;
+      border-bottom: 2px solid #2A3545;
+      padding: 6px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+      font-size: 11px;
+      color: #8A9BAE;
+      flex-shrink: 0;
+    }
+    #toolbar .session-name {
+      color: #4A8B94;
+      font-weight: bold;
+    }
+    #toolbar .status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #toolbar .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4ADE80;
+    }
+    #toolbar .dot.disconnected { background: #FF4500; }
+    #toolbar button {
+      background: #2A3648;
+      border: 1px solid #2A3545;
+      color: #8A9BAE;
+      padding: 4px 12px;
+      font-family: inherit;
+      font-size: 11px;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+    #toolbar button:hover { background: #4A8B94; color: #fff; }
+    #terminal-container {
+      flex: 1;
+      overflow: hidden;
+    }
+    .xterm { height: 100%; }
+    /* iOS safe area */
+    @supports (padding-bottom: env(safe-area-inset-bottom)) {
+      body { padding-bottom: env(safe-area-inset-bottom); }
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <div class="status">
+      <div id="status-dot" class="dot"></div>
+      <span>◈ <span id="session-label" class="session-name">CONNECTING...</span></span>
+    </div>
+    <div>
+      <button onclick="location.href='/'">✕ CLOSE</button>
+    </div>
+  </div>
+  <div id="terminal-container"></div>
+
+  <script src="xterm.min.js"></script>
+  <script src="xterm-addon-fit.min.js"></script>
+  <script>
+    const session = new URLSearchParams(location.search).get('session');
+    if (!session) { location.href = '/'; }
+
+    document.getElementById('session-label').textContent = session;
+    document.title = `TERMINAL // ${session}`;
+
+    const term = new Terminal({
+      theme: {
+        background: '#1A1A1A',
+        foreground: '#C8D6E5',
+        cursor: '#4A8B94',
+        selectionBackground: 'rgba(74,139,148,0.3)',
+        black: '#1A1A1A',
+        red: '#FF4500',
+        green: '#4ADE80',
+        yellow: '#FACC15',
+        blue: '#4A8B94',
+        magenta: '#A78BFA',
+        cyan: '#5CB8C4',
+        white: '#C8D6E5'
+      },
+      fontSize: 14,
+      fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+      scrollback: 2000,
+      cursorBlink: true,
+      allowProposedApi: true
+    });
+
+    const fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+
+    const container = document.getElementById('terminal-container');
+    term.open(container);
+    fitAddon.fit();
+
+    // WebSocket to PTY bridge
+    const wsUrl = `ws://${location.host}/pty?session=${encodeURIComponent(session)}&cols=${term.cols}&rows=${term.rows}`;
+    let ws = null;
+    let reconnectTimer = null;
+    const dot = document.getElementById('status-dot');
+
+    function connect() {
+      ws = new WebSocket(wsUrl);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = () => {
+        dot.className = 'dot';
+        term.focus();
+      };
+
+      ws.onmessage = (e) => {
+        if (typeof e.data === 'string') {
+          term.write(e.data);
+        } else {
+          term.write(new Uint8Array(e.data));
+        }
+      };
+
+      ws.onclose = () => {
+        dot.className = 'dot disconnected';
+        // Reconnect after 2s
+        if (!reconnectTimer) {
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            connect();
+          }, 2000);
+        }
+      };
+
+      ws.onerror = () => {
+        dot.className = 'dot disconnected';
+      };
+    }
+
+    // Send keystrokes to server
+    term.onData(data => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+      }
+    });
+
+    // Handle resize
+    window.addEventListener('resize', () => {
+      fitAddon.fit();
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      }
+    });
+
+    connect();
+  </script>
+</body>
+</html>

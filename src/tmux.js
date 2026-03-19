@@ -2,7 +2,7 @@ const { exec } = require('child_process');
 
 function wslExec(cmd, timeoutMs = 10000) {
   return new Promise((resolve) => {
-    const child = exec(`wsl bash -c ${JSON.stringify(cmd)}`, {
+    const child = exec(`wsl -d Ubuntu-24.04 bash -c ${JSON.stringify(cmd)}`, {
       timeout: timeoutMs,
       encoding: 'utf8',
       windowsHide: true
@@ -48,19 +48,28 @@ async function killSession(sessionName) {
 
 async function sendKeys(sessionName, text) {
   const escaped = text.replace(/'/g, "'\\''");
+  // Send text and Enter separately with delay — TUI apps (codex, claude) need this
   const r1 = await wslExec(`tmux send-keys -t ${esc(sessionName)} '${escaped}'`);
   if (r1 === null) return false;
+  await new Promise(r => setTimeout(r, 300));
   const r2 = await wslExec(`tmux send-keys -t ${esc(sessionName)} Enter`);
   return r2 !== null;
 }
 
 async function createSession(name, workdir, command) {
+  // Convert Windows path to WSL path for tmux working directory
   const wslWorkdir = windowsToWslPath(workdir);
+
+  // Ensure WSL interop is active (systemd can drop it)
+  await wslExec("test -f /proc/sys/fs/binfmt_misc/WSLInterop || sudo sh -c 'echo :WSLInterop:M::MZ::/init:PF > /proc/sys/fs/binfmt_misc/register'");
+
   const r1 = await wslExec(`tmux new-session -d -s ${esc(name)} -c ${esc(wslWorkdir)}`);
   if (r1 === null) return false;
 
   if (command) {
-    const escaped = command.replace(/'/g, "'\\''");
+    // Wrap Windows commands with cmd.exe /c for WSL interop
+    const wslCmd = `cmd.exe /c '${command.replace(/'/g, "'\\''")}'`;
+    const escaped = wslCmd.replace(/'/g, "'\\''");
     await wslExec(`tmux send-keys -t ${esc(name)} '${escaped}' Enter`);
   }
   return true;
@@ -84,6 +93,8 @@ function esc(str) {
   return `'${str.replace(/'/g, "'\\''")}'`;
 }
 
+const TMUX_EXE = 'tmux'; // WSL tmux
+
 module.exports = {
   listSessions,
   capturePane,
@@ -92,5 +103,6 @@ module.exports = {
   createSession,
   sendSpecialKey,
   wslExec,
-  windowsToWslPath
+  windowsToWslPath,
+  TMUX_EXE
 };
