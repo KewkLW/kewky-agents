@@ -571,16 +571,14 @@ function populateAgentSelector(agentDetails) {
   for (const [name, details] of Object.entries(agentDetails)) {
     if (name === 'team-lead') continue;
     const icon = ICONS[name] || '>';
-    const label = document.createElement('label');
-    label.className = 'agent-checkbox';
-    label.innerHTML = `
-      <input type="checkbox" value="${escHtml(name)}">
-      <span class="agent-check-box"></span>
-      <span class="agent-check-icon">${icon}</span>
-      <span class="agent-check-label">${escHtml(name.toUpperCase())}</span>
-      <span class="agent-check-model">${escHtml(details.model || '')}</span>
-    `;
-    container.appendChild(label);
+    const pill = document.createElement('span');
+    pill.className = 'agent-pill';
+    pill.dataset.agent = name;
+    pill.innerHTML = `<span class="pill-icon">${icon}</span>${escHtml(name.toUpperCase())}`;
+    pill.addEventListener('click', () => {
+      pill.classList.toggle('selected');
+    });
+    container.appendChild(pill);
   }
 }
 
@@ -754,6 +752,17 @@ function initTabs() {
 // ============================================
 
 function initResearch() {
+  // Options collapsible toggle
+  const optionsToggle = document.getElementById('research-options-toggle');
+  const optionsPanel = document.getElementById('research-options');
+  if (optionsToggle && optionsPanel) {
+    optionsToggle.addEventListener('click', () => {
+      const isHidden = optionsPanel.classList.contains('hidden');
+      optionsPanel.classList.toggle('hidden');
+      optionsToggle.querySelector('.research-options-arrow').textContent = isHidden ? '\u2212' : '+';
+    });
+  }
+
   document.getElementById('research-deploy-btn').addEventListener('click', () => {
     const topic = document.getElementById('research-topic').value.trim();
     if (!topic) {
@@ -767,8 +776,8 @@ function initResearch() {
     const returnFormat = document.getElementById('research-format').value.trim();
 
     const agents = [];
-    document.querySelectorAll('#agent-selector input[type="checkbox"]:checked').forEach(cb => {
-      agents.push(cb.value);
+    document.querySelectorAll('#agent-selector .agent-pill.selected').forEach(pill => {
+      agents.push(pill.dataset.agent);
     });
 
     if (agents.length === 0) {
@@ -792,6 +801,10 @@ function initResearch() {
     document.getElementById('research-focus').value = '';
     document.getElementById('research-ignore').value = '';
     document.getElementById('research-format').value = '';
+    // Deselect pills
+    document.querySelectorAll('#agent-selector .agent-pill.selected').forEach(pill => {
+      pill.classList.remove('selected');
+    });
   });
 }
 
@@ -831,7 +844,7 @@ function createMissionCard(mission) {
   card.className = 'mission-card';
   card.dataset.missionId = mission.id;
 
-  const canView = mission.status === 'complete' || mission.status === 'partial' || mission.status === 'history';
+  const canView = mission.status === 'complete' || mission.status === 'partial' || mission.status === 'history' || mission.status === 'synthesizing';
   if (canView) card.classList.add('clickable');
 
   card.innerHTML = buildMissionHTML(mission);
@@ -860,7 +873,7 @@ function updateMissionCard(mission) {
   const card = missionElements[mission.id];
   if (!card) return;
 
-  const canView = mission.status === 'complete' || mission.status === 'partial' || mission.status === 'history';
+  const canView = mission.status === 'complete' || mission.status === 'partial' || mission.status === 'history' || mission.status === 'synthesizing';
   card.classList.toggle('clickable', canView || mission.status === 'running' || mission.status === 'deploying');
 
   // Update status badge
@@ -881,8 +894,8 @@ function buildMissionHTML(mission) {
   const agentChips = buildAgentChipsHTML(mission.agents);
   const canKill = mission.status === 'deploying' || mission.status === 'running';
   const createdTime = new Date(mission.createdAt).toLocaleTimeString();
-  const canView = mission.status === 'complete' || mission.status === 'partial' || mission.status === 'history' || mission.status === 'running' || mission.status === 'deploying';
-  const dotClass = mission.status === 'running' || mission.status === 'deploying' ? 'running' : mission.status === 'complete' || mission.status === 'history' ? 'ready' : 'idle';
+  const canView = mission.status === 'complete' || mission.status === 'partial' || mission.status === 'history' || mission.status === 'running' || mission.status === 'deploying' || mission.status === 'synthesizing';
+  const dotClass = mission.status === 'running' || mission.status === 'deploying' ? 'running' : mission.status === 'synthesizing' ? 'thinking' : mission.status === 'complete' || mission.status === 'history' ? 'ready' : 'idle';
   const scopeHtml = mission.scope ? `<div class="mission-scope">${escHtml(mission.scope)}</div>` : '';
 
   return `
@@ -916,11 +929,13 @@ function buildMissionHTML(mission) {
 function buildAgentChipsHTML(agents) {
   return Object.entries(agents).map(([name, state]) => {
     const statusLabel = state.status.replace(/_/g, ' ');
+    const angleBadge = state.angle ? `<span class="angle-badge" title="${escHtml(state.angle)}">${escHtml(state.angle)}</span>` : '';
     return `
       <div class="mission-agent-chip">
         <span class="chip-dot ${state.status}"></span>
         <span class="chip-name">${name.toUpperCase()}</span>
         <span class="chip-status">${statusLabel}</span>
+        ${angleBadge}
       </div>
     `;
   }).join('');
@@ -954,6 +969,9 @@ function showReportModal(report) {
   // Build agent tabs
   const agentNames = Object.keys(report.agents);
   let tabsHtml = '<button class="report-tab active" data-agent="all">ALL</button>';
+  if (report.synthesis) {
+    tabsHtml += '<button class="report-tab" data-agent="synthesis">\u25C8 SYNTHESIS</button>';
+  }
   for (const name of agentNames) {
     const icon = AGENT_ICONS[name] || '\u25C8';
     tabsHtml += `<button class="report-tab" data-agent="${name}">${icon} ${name.toUpperCase()}</button>`;
@@ -986,7 +1004,13 @@ function renderReportContent(report, filter) {
   };
 
   if (filter === 'all') {
-    // Show brief first
+    // Show synthesis first if available
+    if (report.synthesis) {
+      html += '<div class="report-agent-separator"><span class="agent-icon">\u25C8</span><span class="agent-label">SYNTHESIS</span></div>';
+      html += renderMd(report.synthesis);
+    }
+
+    // Show brief
     if (report.brief) {
       html += '<div class="report-agent-separator"><span class="agent-icon">\u25C8</span><span class="agent-label">RESEARCH BRIEF</span></div>';
       html += renderMd(report.brief);
@@ -1001,6 +1025,12 @@ function renderReportContent(report, filter) {
       } else {
         html += '<div class="report-no-output">// NO OUTPUT YET</div>';
       }
+    }
+  } else if (filter === 'synthesis') {
+    if (report.synthesis) {
+      html = renderMd(report.synthesis);
+    } else {
+      html = '<div class="report-no-output">// NO SYNTHESIS AVAILABLE</div>';
     }
   } else {
     const data = report.agents[filter];

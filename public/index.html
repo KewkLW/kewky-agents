@@ -96,51 +96,51 @@
 
   <!-- ========== RESEARCH TAB ========== -->
   <div id="tab-research" class="tab-content">
-    <!-- RESEARCH BRIEF FORM -->
+    <!-- RESEARCH FORM -->
     <section id="research-panel">
       <div class="panel-header">
-        <span class="section-label">01 / RESEARCH_BRIEF</span>
+        <span class="section-label">01 / RESEARCH</span>
       </div>
       <div class="research-form">
-        <div class="form-row">
-          <div class="form-group flex-grow">
-            <label class="form-label">// TOPIC <span class="required">*</span></label>
-            <input id="research-topic" type="text" class="form-input" placeholder="What do you want researched?">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group flex-grow">
-            <label class="form-label">// SCOPE</label>
-            <input id="research-scope" type="text" class="form-input" placeholder="What to look at (APIs, libraries, approaches...)">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group flex-grow">
-            <label class="form-label">// FOCUS</label>
-            <input id="research-focus" type="text" class="form-input" placeholder="What to focus on specifically">
-          </div>
-          <div class="form-group flex-grow">
-            <label class="form-label">// IGNORE</label>
-            <input id="research-ignore" type="text" class="form-input" placeholder="What to skip or avoid">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group flex-grow">
-            <label class="form-label">// RETURN_FORMAT</label>
-            <textarea id="research-format" class="form-input form-textarea" rows="3" placeholder="Custom output format (leave empty for default: summary, findings, options, recommendation, references)"></textarea>
-          </div>
+        <div class="form-group flex-grow">
+          <textarea id="research-topic" class="form-input research-input" rows="3" placeholder="What do you want researched? Be specific..."></textarea>
         </div>
 
-        <!-- AGENT SELECTOR -->
-        <div class="panel-header" style="padding-left:0">
-          <span class="section-label">02 / SELECT_AGENTS</span>
-        </div>
-        <div id="agent-selector" class="agent-selector">
+        <!-- INLINE AGENT PILLS -->
+        <div id="agent-selector" class="agent-pills">
           <!-- populated dynamically from /api/config -->
         </div>
 
-        <div class="form-row" style="margin-top:12px">
-          <button id="research-deploy-btn" class="btn-primary btn-deploy">◈ DEPLOY RESEARCH TEAM</button>
+        <!-- COLLAPSIBLE OPTIONS -->
+        <div class="research-options-toggle" id="research-options-toggle">
+          <span class="section-label" style="font-size:10px; cursor:pointer">OPTIONS</span>
+          <span class="research-options-arrow">+</span>
+        </div>
+        <div id="research-options" class="research-options hidden">
+          <div class="form-row">
+            <div class="form-group flex-grow">
+              <label class="form-label">// SCOPE</label>
+              <input id="research-scope" type="text" class="form-input" placeholder="What to look at (APIs, libraries, approaches...)">
+            </div>
+            <div class="form-group flex-grow">
+              <label class="form-label">// FOCUS</label>
+              <input id="research-focus" type="text" class="form-input" placeholder="What to focus on specifically">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group flex-grow">
+              <label class="form-label">// IGNORE</label>
+              <input id="research-ignore" type="text" class="form-input" placeholder="What to skip or avoid">
+            </div>
+            <div class="form-group flex-grow">
+              <label class="form-label">// RETURN_FORMAT</label>
+              <input id="research-format" type="text" class="form-input" placeholder="Custom output format (leave empty for default)">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:10px">
+          <button id="research-deploy-btn" class="btn-primary btn-deploy">DEPLOY</button>
         </div>
       </div>
     </section>
@@ -148,7 +148,7 @@
     <!-- ACTIVE MISSIONS -->
     <section id="missions-section">
       <div class="panel-header">
-        <span class="section-label">03 / ACTIVE_MISSIONS</span>
+        <span class="section-label">02 / MISSIONS</span>
       </div>
       <div id="missions-grid" class="missions-grid">
         <!-- filled by JS -->
