@@ -17,13 +17,13 @@ const REMOTE_HOSTS = getRemoteHosts();
 const AGENTS = {
   opus: {
     model: 'claude-opus-4-6[1m]',
-    launchCmd: 'claude --dangerously-skip-permissions --model "claude-opus-4-6[1m]"',
+    launchCmd: 'claude --dangerously-skip-permissions --model claude-opus-4-6[1m]',
     readyIndicator: /Try|context left/,
     type: 'claude'
   },
   'team-lead': {
     model: 'claude-opus-4-6[1m]',
-    launchCmd: 'claude --dangerously-skip-permissions --model "claude-opus-4-6[1m]"',
+    launchCmd: 'claude --dangerously-skip-permissions --model claude-opus-4-6[1m]',
     readyIndicator: /Try|context left/,
     type: 'claude',
     role: 'team-lead',
@@ -39,7 +39,7 @@ You have access to claude-teams MCP tools for task management and messaging.
 When you receive a mission briefing, decompose it into subtasks and distribute to available agents.
 Use the dashboard to monitor progress. Be decisive and direct in your coordination.
 
-Available agents: opus (builder), sonnet (builder), haiku (researcher), codex-primary (builder/reviewer), codex-alt (builder), gemini (builder), codex-nano (subagent/search), codex-mini (subagent/worker)
+Available agents: opus (builder), sonnet (builder), haiku (researcher), stealth-researcher (web recon with stealth browser), codex-primary (builder/reviewer), codex-alt (builder), gemini (builder), codex-nano (subagent/search), codex-mini (subagent/worker)
 
 Respond with your coordination plan when given an objective.`
   },
@@ -89,6 +89,25 @@ Respond with your coordination plan when given an objective.`
     readyIndicator: /Type your message|shortcuts/,
     type: 'gemini',
     postLaunch: '\x19' // Ctrl+Y byte
+  },
+  'stealth-researcher': {
+    model: 'claude-sonnet-4-5-20250929',
+    launchCmd: 'claude --dangerously-skip-permissions --model claude-sonnet-4-5-20250929',
+    readyIndicator: /Try|context left/,
+    type: 'claude',
+    role: 'researcher',
+    initPrompt: `You are a STEALTH WEB RESEARCHER. You have the stealth-browser-mcp tools for undetectable browser automation.
+
+Your workflow:
+1. spawn_browser() to launch a stealth Chrome instance
+2. navigate() to target URLs — bypasses Cloudflare, antibot, WAFs
+3. Extract data: get_page_text, query_elements, extract_complete_element_cdp
+4. Intercept traffic: list_network_requests, get_request_details, create_dynamic_hook
+5. Inspect APIs: discover_global_functions, call_javascript_function, execute_cdp_command
+6. Dump state: cookies, localStorage, sessionStorage
+
+You can also use web search MCP for OSINT. Combine stealth browsing with search for comprehensive recon.
+Always close browser instances when done. Report findings in structured markdown.`
   }
 };
 
@@ -111,6 +130,7 @@ const PRESETS = [
   { label: 'SONNET_BUILDER', agent: 'sonnet', role: 'builder', icon: '\u25C7' },
   { label: 'GEMINI_BUILDER', agent: 'gemini', role: 'builder', icon: '\u25B2' },
   { label: 'HAIKU_RESEARCHER', agent: 'haiku', role: 'researcher', icon: '\u25CE' },
+  { label: 'STEALTH_RESEARCHER', agent: 'stealth-researcher', role: 'researcher', icon: '\u2620' },
   { label: 'CODEX_NANO', agent: 'codex-nano', role: 'subagent', icon: '\u00B7' },
   { label: 'CODEX_MINI', agent: 'codex-mini', role: 'subagent', icon: '\u25CB' },
   { label: 'CODEX_REVIEWER', agent: 'codex-primary', role: 'reviewer', icon: '\u22A1' }

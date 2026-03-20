@@ -72,6 +72,7 @@
       <span>◈ <span id="session-label" class="session-name">CONNECTING...</span></span>
     </div>
     <div>
+      <button id="paste-btn" onclick="doPaste()">PASTE</button>
       <button onclick="location.href='/'">✕ CLOSE</button>
     </div>
   </div>
@@ -85,6 +86,8 @@
 
     document.getElementById('session-label').textContent = session;
     document.title = `TERMINAL // ${session}`;
+
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     const term = new Terminal({
       theme: {
@@ -101,11 +104,12 @@
         cyan: '#5CB8C4',
         white: '#C8D6E5'
       },
-      fontSize: 14,
+      fontSize: isMobile ? 12 : 14,
       fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
       scrollback: 2000,
       cursorBlink: true,
-      allowProposedApi: true
+      allowProposedApi: true,
+      rightClickSelectsWord: true
     });
 
     const fitAddon = new FitAddon.FitAddon();
@@ -153,6 +157,41 @@
         dot.className = 'dot disconnected';
       };
     }
+
+    // Paste from clipboard into terminal
+    async function doPaste() {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(text);
+        }
+      } catch (e) {
+        // Fallback: prompt for text on iOS where clipboard API may be blocked
+        const text = prompt('Paste text:');
+        if (text && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(text);
+        }
+      }
+    }
+    // Make doPaste available to onclick
+    window.doPaste = doPaste;
+
+    // Copy selection to clipboard automatically
+    term.onSelectionChange(() => {
+      const sel = term.getSelection();
+      if (sel && navigator.clipboard) {
+        navigator.clipboard.writeText(sel).catch(() => {});
+      }
+    });
+
+    // Ctrl+V paste on desktop
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type === 'keydown' && e.ctrlKey && e.key === 'v') {
+        doPaste();
+        return false; // prevent default xterm handling
+      }
+      return true;
+    });
 
     // Send keystrokes to server
     term.onData(data => {
