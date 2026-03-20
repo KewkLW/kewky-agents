@@ -151,11 +151,54 @@ WSL_DISTRO=Ubuntu-24.04
 
 WSL presets appear automatically when WSL is detected. CLI tools must be installed inside the WSL distro.
 
-## Mobile Access
+## Mobile & Remote Access
 
-Set `TAILSCALE_HOST` to your machine's Tailscale hostname or local IP. Open `http://that-hostname:3847` on your phone. You get the full dashboard — launch agents, monitor status, open interactive terminals, all from mobile.
+The dashboard has no built-in authentication. Anyone who can reach the port can control your agents. Use [Tailscale](https://tailscale.com) (free for personal use) to create a private network that only your devices can access — no port forwarding, no firewall rules, no exposed ports.
 
-For access outside your local network, use [Tailscale](https://tailscale.com) (free for personal use) to create a secure tunnel. No port forwarding needed.
+### Setting Up Tailscale
+
+1. **Install Tailscale** on the machine running the dashboard:
+   - **Windows**: Download from [tailscale.com/download](https://tailscale.com/download) or `winget install Tailscale.Tailscale`
+   - **macOS**: `brew install tailscale` or download from the App Store
+   - **Linux**: `curl -fsSL https://tailscale.com/install.sh | sh`
+
+2. **Install Tailscale on your phone/tablet**:
+   - iOS: [App Store](https://apps.apple.com/app/tailscale/id1470499037)
+   - Android: [Play Store](https://play.google.com/store/apps/details?id=com.tailscale.ipn)
+
+3. **Sign in on both devices** with the same account (Google, Microsoft, GitHub, etc.). They'll automatically join the same private network (tailnet).
+
+4. **Find your machine's Tailscale hostname**:
+   ```bash
+   tailscale status
+   ```
+   Look for your machine's name in the first column (e.g., `kewk-1`, `my-desktop`). The second column is the Tailscale IP (e.g., `100.x.y.z`). Either works as a hostname.
+
+5. **Set `TAILSCALE_HOST` in your `.env`**:
+   ```bash
+   # Use the machine name from tailscale status
+   TAILSCALE_HOST=kewk-1
+   ```
+
+6. **Restart the dashboard** (`npm start` or kill and relaunch). The startup banner will confirm:
+   ```
+   // TAILSCALE_HOST: kewk-1
+   ```
+
+7. **Open the dashboard from your phone**:
+   ```
+   http://kewk-1:3847
+   ```
+   That's it. Your phone resolves the Tailscale hostname automatically via MagicDNS. Full dashboard access — launch agents, monitor status, open interactive terminals, all from mobile.
+
+### Why Not Just Use Local IP?
+
+You *can* use `http://192.168.1.x:3847` on the same wifi, but:
+- It breaks when you leave your home network
+- It changes if your router reassigns IPs
+- Anyone on the same wifi can reach it
+
+Tailscale gives you a stable hostname that works from anywhere — your couch, a coffee shop, a friend's house — and only devices signed into your tailnet can connect.
 
 ## Settings
 
